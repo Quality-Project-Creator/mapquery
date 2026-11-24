@@ -1,0 +1,56 @@
+
+<a id="a-link"></a>
+<script charset="utf-8" src="https://g.alicdn.com/mtb/lib-windvane/3.0.6/windvane.js" crossorigin></script>
+<script src="https://image.uc.cn/s/uae/g/6h/node/uc-cn-jssdk/prod/2.8.54/jssdk_cn.js" crossorigin></script>
+<script>
+  localStorage.x5referer = window.location.href;
+  var link = document.getElementById("a-link");
+  var isMobile = navigator.userAgent.match(/.*(iPhone|iPad|Android|ios|SymbianOS|Windows Phone).*/i);
+  var isHarmony = navigator.userAgent.match(/ArkWeb/i);
+  var isQwen = navigator.userAgent.match(/AliApp\(tongyi\/[^)]+\)/i);
+  var host = (isMobile || isHarmony) ? "https://id.amap.com/?mode=lite&ref=" : "https://id.amap.com/?mode=lite&ref=";
+  try {
+	var hostValue = window.location.host;
+	var parts = hostValue && hostValue.split('.');
+	var exp = new Date();
+	var maxAge = -100;
+	exp.setTime(exp.getTime() + maxAge);
+	var cookie = 'x5secdata=;maxAge=' + maxAge + ';expires=' + exp.toUTCString() + ';path=/;domain=.' + parts.slice(-2).join('.') + ';';
+	document.cookie = cookie;
+	document.cookie = cookie + 'Secure;SameSite=None';
+  } catch(e) {}
+  var jump = "https%3a%2f%2fwww.amap.com:443/_AMapService/v3/geocode/regeo%2F_____tmd_____%2Fpage%2Flogin_jump%3Frand%3DS3WxGHAgAt756EpznwfNzJq2AFA2qBNla3j6EINUS8We9dazM_iKElp8DwVSHZUevpC41Bx7RzivXIj9RnZgdg%26_lgt_%3D9dc6417f74bd9dcd79bff3dd4e327408___285052___238e875f6989ff67b1c5d79de1a18766___eaebc79cac1eb5d2f7d8b4595e00ec73344a42d5a0b8cf56539c823cd24ac06c8e2f3b7c24f4982de87983cfd3d00790fe05a67e4ad31adcf4c932575c904394a1a1e41056cd22fa975b3717af167e5a8c83c74b5df2a39979a8da2a52ef1ad8d8662daddc20dad3e496396e39b5c77826ba67f21173ab1d8c40ddda59656f519836dcc5f531680f95e1a9b29425fad019b4c3107e712c0b12b48606e859d16ccbd4fb8cf17cff382cca796b27b42f93bdd660982d155ad900bd3837f5da3e573145fe4b4e3bf9b9fdda17b8e97063986452ed12e22944416cbcabf61788b4cf8515d286deeb4be1b951becac54b46589ecfa26f441571ef212c35a64e4d3f7bdaddd746c114471e73965edee183acc68f978f14623cafeb330da41f9fe62bc4668f9c75661a0af6880d43e57ac2be6b296117688b45635b4318dff6c36287bb30af4a832bf61426825010f9a9695f328063c5452076d6d4d979eaefc1d0e38890bd22562b42cc57ee7b4734e99a60f2a8dd6bbac7f55fc3e2e9cb50d023a600b239ce59eb9c3b119a3aad7871959b14%26uuid%3D9dc6417f74bd9dcd79bff3dd4e327408";
+  link.href = host + jump;
+  if (isQwen && window.ucapi) {
+  	window.ucapi.invoke("biz.uccTrustLogin", {
+        "site":"taobao",
+  		"h5Only": "1"
+    });
+  } else if (window.themis && window.WindVane && !isHarmony) {
+    window.WindVane.call('aluWVJSBridge', 'sdkLogin', {}, function(e) {
+  		window.addEventListener('pageshow', function(event) {
+        	if (event.persisted) {
+  				localStorage.x5referer = "";
+          		window.location.reload();
+        	}
+        });
+  		window.location.href = decodeURIComponent(jump);
+  	}, function(e) {
+  		console.log(e);
+  		history.go(-1);
+		setTimeout(function(){
+  			window.WindVane.call('WebAppInterface', 'pop', {}, function(e) {
+            }, function (e) {});
+  		}, 100);
+  	});
+  } else {
+  	link.click();
+  }
+ window._config_ = {
+   "action": "login",
+   "url": "https://id.amap.com/?mode=lite&ref=https%3a%2f%2fwww.amap.com:443/_AMapService/v3/geocode/regeo%2F_____tmd_____%2Fpage%2Fclose_iframe_page%3Frand%3DS3WxGHAgAt756EpznwfNzJq2AFA2qBNla3j6EINUS8We9dazM_iKElp8DwVSHZUevpC41Bx7RzivXIj9RnZgdg%26uuid%3D9dc6417f74bd9dcd79bff3dd4e327408%26_lgt_%3D9dc6417f74bd9dcd79bff3dd4e327408___285052___238e875f6989ff67b1c5d79de1a18766___eaebc79cac1eb5d2f7d8b4595e00ec73344a42d5a0b8cf56539c823cd24ac06c8e2f3b7c24f4982de87983cfd3d00790fe05a67e4ad31adcf4c932575c904394a1a1e41056cd22fa975b3717af167e5a8c83c74b5df2a39979a8da2a52ef1ad8d8662daddc20dad3e496396e39b5c77826ba67f21173ab1d8c40ddda59656f519836dcc5f531680f95e1a9b29425fad019b4c3107e712c0b12b48606e859d16ccbd4fb8cf17cff382cca796b27b42f93bdd660982d155ad900bd3837f5da3e573145fe4b4e3bf9b9fdda17b8e97063986452ed12e22944416cbcabf61788b4cf8515d286deeb4be1b951becac54b46589ecfa26f441571ef212c35a64e4d3f7bdaddd746c114471e73965edee183acc68f978f14623cafeb330da41f9fe62bc4668f9c75661a0af6880d43e57ac2be6b296117688b45635b4318dff6c36287bb30af4a832bf61426825010f9a9695f328063c5452076d6d4d979eaefc1d0e38890bd22562b42cc57ee7b4734e99a60f2a8dd6bbac7f55fc3e2e9cb50d023a600b239ce59eb9c3b119a3aad7871959b14",
+   "h5url": "https://id.amap.com/?mode=lite&ref=https%3a%2f%2fwww.amap.com:443/_AMapService/v3/geocode/regeo%2F_____tmd_____%2Fpage%2Fclose_iframe_page%3Frand%3DS3WxGHAgAt756EpznwfNzJq2AFA2qBNla3j6EINUS8We9dazM_iKElp8DwVSHZUevpC41Bx7RzivXIj9RnZgdg%26uuid%3D9dc6417f74bd9dcd79bff3dd4e327408%26_lgt_%3D9dc6417f74bd9dcd79bff3dd4e327408___285052___238e875f6989ff67b1c5d79de1a18766___eaebc79cac1eb5d2f7d8b4595e00ec73344a42d5a0b8cf56539c823cd24ac06c8e2f3b7c24f4982de87983cfd3d00790fe05a67e4ad31adcf4c932575c904394a1a1e41056cd22fa975b3717af167e5a8c83c74b5df2a39979a8da2a52ef1ad8d8662daddc20dad3e496396e39b5c77826ba67f21173ab1d8c40ddda59656f519836dcc5f531680f95e1a9b29425fad019b4c3107e712c0b12b48606e859d16ccbd4fb8cf17cff382cca796b27b42f93bdd660982d155ad900bd3837f5da3e573145fe4b4e3bf9b9fdda17b8e97063986452ed12e22944416cbcabf61788b4cf8515d286deeb4be1b951becac54b46589ecfa26f441571ef212c35a64e4d3f7bdaddd746c114471e73965edee183acc68f978f14623cafeb330da41f9fe62bc4668f9c75661a0af6880d43e57ac2be6b296117688b45635b4318dff6c36287bb30af4a832bf61426825010f9a9695f328063c5452076d6d4d979eaefc1d0e38890bd22562b42cc57ee7b4734e99a60f2a8dd6bbac7f55fc3e2e9cb50d023a600b239ce59eb9c3b119a3aad7871959b14",
+   "dialogSize": {"width": "454px", "height": "368px"}
+};
+</script>
+<!--rgv587_flag:sm-->

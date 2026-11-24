@@ -1,0 +1,31 @@
+{
+  "_comment": "HAND WRITTEN SAMPLE of the documented Amap v4 route shape. It was NOT recorded from the live v4 endpoint, because no Amap key was available when it was written. The v3 route puts its paths under route.paths, the v4 route puts them under data.paths, and the v4 route reports a failure with errcode and errmsg.",
+  "errcode": 0,
+  "errmsg": "OK",
+  "data": {
+    "paths": [
+      {
+        "distance": 215,
+        "duration": 52,
+        "steps": [
+          {
+            "instruction": "向东北方向骑行60米",
+            "action": "右转",
+            "road": "东长安街",
+            "distance": 60,
+            "duration": 15,
+            "polyline": "116.397428,39.908823;116.397502,39.908895"
+          },
+          {
+            "instruction": "沿东长安街骑行155米",
+            "action": "直行",
+            "road": "东长安街",
+            "distance": 155,
+            "duration": 37,
+            "polyline": "116.397502,39.908895;116.396670,39.908640"
+          }
+        ]
+      }
+    ]
+  }
+}
