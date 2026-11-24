@@ -647,7 +647,8 @@ mapquery/
 │       └── direct_keys.py          # the keys of the direct channel
 ├── tools/
 │   ├── trace_sources.py           # re-record the traced replies
-│   └── smoke.py                    # one live call per provider
+│   ├── smoke.py                   # one live call per provider
+│   └── check_readmes.py           # check that the two readmes agree
 └── tests/
     ├── conftest.py
     ├── fixtures/                   # the recorded real answers

@@ -7,7 +7,7 @@ No test touches the network.
 """
 
 import os
-from typing import List
+from typing import List, Tuple
 
 import pytest
 
@@ -31,16 +31,28 @@ def read(path: str) -> str:
 
 
 def layout_files(text: str) -> List[str]:
-    """Return the names of the files of a tree that is drawn in the text."""
+    """Return the paths of the entries of a tree that is drawn in the text.
+
+    The tree is read with its indentation, so a nested entry gives its
+    full path, such as ".github/workflows/tests.yml". A folder keeps its
+    trailing slash.
+    """
     names: List[str] = []
+    stack: List[Tuple[int, str]] = []
     for line in text.splitlines():
-        stripped = line.strip()
-        if not stripped.startswith(("├", "└", "│")):
+        if not line.strip().startswith(("├", "└", "│")):
             continue
-        cleaned = stripped.lstrip("│├└─ ")
-        name = cleaned.split("#")[0].strip()
-        if name:
-            names.append(name)
+        positions = [line.find(char) for char in "├└" if line.find(char) >= 0]
+        if not positions:
+            continue
+        depth = min(positions) // 4
+        cleaned = line.strip().lstrip("│├└─ ").split("#")[0].strip()
+        if not cleaned:
+            continue
+        while len(stack) > depth:
+            stack.pop()
+        stack.append((depth, cleaned.rstrip("/")))
+        names.append("/".join(entry for _d, entry in stack))
     return names
 
 
@@ -130,34 +142,18 @@ def test_the_readme_does_not_show_a_rate_limit_as_a_plain_error() -> None:
 
 def test_the_layout_of_the_readme_only_names_files_that_exist() -> None:
     """Every file of the layout of the README is in the repository."""
-    names = every_file_of_the_repo()
-
-    folders = every_folder_of_the_repo()
-
     for name in layout_files(read(README)):
-        if name.endswith("/"):
-            relative = name.rstrip("/")
-            if os.path.isdir(os.path.join(ROOT, relative)):
-                continue
-            assert relative.split("/")[-1] in folders, "{0} is not in the repository".format(name)
+        if os.path.isdir(os.path.join(ROOT, name)):
             continue
-        assert name in names, "{0} is not in the repository".format(name)
+        assert os.path.isfile(os.path.join(ROOT, name)), "{0} is not in the repository".format(name)
 
 
 def test_the_layout_of_the_plan_only_names_files_that_exist() -> None:
     """Every file of the layout of the plan is in the repository."""
-    names = every_file_of_the_repo()
-
-    folders = every_folder_of_the_repo()
-
     for name in layout_files(read(PLAN)):
-        if name.endswith("/"):
-            relative = name.rstrip("/")
-            if os.path.isdir(os.path.join(ROOT, relative)):
-                continue
-            assert relative.split("/")[-1] in folders, "{0} is not in the repository".format(name)
+        if os.path.isdir(os.path.join(ROOT, name)):
             continue
-        assert name in names, "{0} is not in the repository".format(name)
+        assert os.path.isfile(os.path.join(ROOT, name)), "{0} is not in the repository".format(name)
 
 
 def test_the_data_sources_point_at_a_script_that_is_in_the_repository() -> None:
@@ -218,8 +214,8 @@ def test_the_readme_says_that_the_weather_is_always_amap() -> None:
 
 def test_the_trees_hold_the_conftest_of_the_tests() -> None:
     """The conftest of the tests is in both trees."""
-    assert "conftest.py" in layout_files(read(README))
-    assert "conftest.py" in layout_files(read(PLAN))
+    assert "tests/conftest.py" in layout_files(read(README))
+    assert "tests/conftest.py" in layout_files(read(PLAN))
 
 
 def test_the_chinese_readme_is_in_the_repository() -> None:
