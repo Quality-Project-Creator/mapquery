@@ -57,6 +57,15 @@ class TencentProvider(Provider):
         """Return the route modes this provider can do on one channel."""
         return set(MODES)
 
+    def limits_for(self, channel: Channel) -> List[str]:
+        """Return the limits of Tencent on one channel.
+
+        The suggestion route of Tencent has no nearby filter, and the
+        official channel uses the same route, so a nearby search is not
+        possible on either of them.
+        """
+        return ["a nearby search is not available"]
+
     def key(self) -> str:
         """Return the key to use. The official channel uses the key of the user."""
         if self.active_channel() == Channel.OFFICIAL:
@@ -77,8 +86,10 @@ class TencentProvider(Provider):
     ) -> List[Place]:
         """Search for places. Return a list of places in GCJ-02 order."""
         if near is not None:
-            # The suggestion route has no near filter.
-            raise self.not_supported("search with a near filter")
+            # The suggestion route has no near filter, and the official
+            # channel uses the same route. No channel of Tencent can do
+            # a nearby search.
+            raise self.limit_error("search with a near filter")
 
         params: Dict[str, Any] = {
             "keyword": keyword,
@@ -218,8 +229,12 @@ class TencentProvider(Provider):
         origin: Coord,
         destination: Coord,
         mode: str = "driving",
+        city: Optional[str] = None,
     ) -> Route:
-        """Find a route between two GCJ-02 points."""
+        """Find a route between two GCJ-02 points.
+
+        Tencent needs no city for a route, so the city is ignored.
+        """
         if mode not in self.modes_for(self.active_channel()):
             raise self.mode_error(mode)
         params = {
@@ -267,11 +282,13 @@ class TencentProvider(Provider):
                     )
                 )
 
+        distance_m, duration_s = self._route_numbers(first, self.display_name)
+
         return Route(
             provider=self.name,
             mode=mode,
-            distance_m=self._as_float(first.get("distance")),
-            duration_s=self._as_float(first.get("duration")),
+            distance_m=distance_m,
+            duration_s=duration_s,
             origin=origin,
             destination=destination,
             steps=steps,

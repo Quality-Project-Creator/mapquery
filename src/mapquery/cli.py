@@ -23,6 +23,7 @@ from .compare import compare_places
 from .config import DEFAULT_CONFIG_PATH, Config, ConfigFileError, read_config_file
 from .coords import CoordSystem, convert, haversine_m
 from .engine import run_many
+from .filters import filter_places, parse_types
 from .http import HttpClient
 from .models import (
     Channel,
@@ -91,6 +92,9 @@ CONFIG_SETTINGS: Dict[str, Any] = {
     "connect_timeout": 3.1,
     "retries": 2,
     "jobs": 8,
+    "cluster_radius": 150.0,
+    "name_ratio": 0.55,
+    "same_place_radius": 25.0,
 }
 
 
@@ -196,6 +200,11 @@ def build_parser() -> argparse.ArgumentParser:
     search.add_argument("--near", metavar="LNG,LAT", help="a point to measure from")
     search.add_argument("--radius", type=float, help="the radius in metres")
     search.add_argument("--limit", type=int, default=10, help="how many places to show")
+    search.add_argument(
+        "--types",
+        metavar="WORDS",
+        help="keep only the places of these types, such as \u666f\u70b9,\u535a\u7269\u9986",
+    )
 
     geocode = commands.add_parser(
         "geocode", parents=[common], help="turn an address into a point"
@@ -216,6 +225,10 @@ def build_parser() -> argparse.ArgumentParser:
         choices=sorted(ROUTE_MODES.keys()),
         default="driving",
         help="the kind of route",
+    )
+    route.add_argument(
+        "--city",
+        help="the city of the start point, such as Beijing",
     )
 
     matrix = commands.add_parser(
@@ -244,6 +257,29 @@ def build_parser() -> argparse.ArgumentParser:
     compare.add_argument("--near", metavar="LNG,LAT", help="a point to measure from")
     compare.add_argument("--radius", type=float, help="the radius in metres")
     compare.add_argument("--limit", type=int, default=10, help="how many places to show")
+    compare.add_argument(
+        "--types",
+        metavar="WORDS",
+        help="keep only the places of these types, such as \u666f\u70b9,\u535a\u7269\u9986",
+    )
+    compare.add_argument(
+        "--cluster-radius",
+        dest="cluster_radius",
+        type=float,
+        help="how far two places may be apart to be one place, in metres",
+    )
+    compare.add_argument(
+        "--name-ratio",
+        dest="name_ratio",
+        type=float,
+        help="how alike two names must be to be one place, from 0 to 1",
+    )
+    compare.add_argument(
+        "--same-place-radius",
+        dest="same_place_radius",
+        type=float,
+        help="the distance under which two places are the same building",
+    )
 
     convert_parser = commands.add_parser(
         "convert", parents=[common], help="change a point from one system to another"
@@ -270,8 +306,13 @@ def build_parser() -> argparse.ArgumentParser:
     )
     weather.add_argument("adcode", help="the area code, such as 110101")
 
-    commands.add_parser(
+    providers_parser = commands.add_parser(
         "providers", parents=[common], help="show the providers and what they can do"
+    )
+    providers_parser.add_argument(
+        "--channel",
+        choices=[str(item) for item in Channel],
+        help="the channel to show, instead of the one that would be used",
     )
 
     config_parser = commands.add_parser(
@@ -432,6 +473,133 @@ def _limit_of(args: argparse.Namespace) -> int:
     return int(limit)
 
 
+def _types_of(args: argparse.Namespace) -> List[str]:
+    """Return the wanted type words of the command.
+
+    An empty entry in the list is a mistake of the user, so the command
+    stops before it calls a provider.
+    """
+    text = getattr(args, "types", None)
+    if text is None:
+        return []
+    try:
+        return parse_types(text)
+    except ValueError as exc:
+        raise UsageError(str(exc))
+
+
+def _number_of(
+    args: argparse.Namespace,
+    name: str,
+    fallback: float,
+    low: float,
+    high: float,
+) -> float:
+    """Return one number of the options, or the value of the config.
+
+    The number must be inside the range. A number outside of it is a
+    mistake of the user, so the command stops before it calls a
+    provider.
+    """
+    value = getattr(args, name, None)
+    if value is None:
+        value = float(fallback)
+    value = float(value)
+    if not low <= value <= high:
+        raise UsageError(
+            "the {0} must be between {1} and {2}".format(
+                name.replace("_", " "), low, high
+            )
+        )
+    return value
+
+
+def _cluster_rules(args: argparse.Namespace, config: Config) -> Dict[str, float]:
+    """Return the rules that the comparison of the places uses.
+
+    The option of the command wins over the config file. The rules of
+    the compare module are used when neither of them says something.
+    """
+    return {
+        "match_distance_m": _number_of(
+            args, "cluster_radius", config.cluster_radius, 0.0, 100000.0
+        ),
+        "name_ratio": _number_of(args, "name_ratio", config.name_ratio, 0.0, 1.0),
+        "same_place_distance_m": _number_of(
+            args, "same_place_radius", config.same_place_radius, 0.0, 100000.0
+        ),
+    }
+
+
+def _filter_by_types(
+    results: Dict[str, ProviderResult],
+    providers: Sequence[str],
+    words: Sequence[str],
+) -> Tuple[Dict[str, List[Place]], List[Dict[str, Any]]]:
+    """Keep the places that are of the wanted types.
+
+    The same words are used for every provider. Every provider has its
+    own words for the type of a place, so the report says how many
+    places of every provider matched and how many were dropped.
+    """
+    places: Dict[str, List[Place]] = {}
+    report: List[Dict[str, Any]] = []
+    for name in providers:
+        result = results.get(name)
+        if result is None or not result.is_ok:
+            continue
+        kept, dropped, without = filter_places(result.data, words)
+        places[name] = kept
+        report.append(
+            {
+                "provider": name,
+                "returned": len(result.data),
+                "matched": len(kept),
+                "dropped": dropped,
+                "without_type": without,
+            }
+        )
+    return places, report
+
+
+def _type_lines(words: Sequence[str], report: List[Dict[str, Any]]) -> List[str]:
+    """Return the lines that say what the type filter did."""
+    if not words:
+        return []
+    lines = ["Types: {0}".format(", ".join(words))]
+    for row in report:
+        line = "  {0}: {1} of {2} places match, {3} dropped".format(
+            row["provider"], row["matched"], row["returned"], row["dropped"]
+        )
+        if row["without_type"]:
+            line += " ({0} had no category and no name)".format(row["without_type"])
+        lines.append(line)
+    return lines
+
+
+def _type_payload(words: Sequence[str], report: List[Dict[str, Any]]) -> Dict[str, Any]:
+    """Return the work of the type filter as data, for the JSON output."""
+    return {
+        "words": list(words),
+        "providers": {row["provider"]: row for row in report},
+    }
+
+
+def _exit_code_of_types(
+    places: Dict[str, List[Place]],
+) -> int:
+    """Return the exit code of a run that had a type filter.
+
+    The code is 0 when at least one provider answered with a place of
+    the wanted types. It is 1 when no place of the wanted types was
+    left.
+    """
+    for name in places:
+        if places[name]:
+            return 0
+    return 1
+
+
 def _place_dict(place: Place) -> Dict[str, Any]:
     """Return one place as a dict, for the JSON output."""
     return {
@@ -574,14 +742,19 @@ def _finish(
     payload: Dict[str, Any],
     results: Dict[str, ProviderResult],
     exit_code: Optional[int] = None,
+    notes: Optional[Sequence[str]] = None,
 ) -> int:
     """Print the answer and return the exit code.
 
     The exit code is 0 when a provider answered and 1 when none of them
     did. A command that has its own rule, like the matrix, gives the code
     that it wants.
+
+    The extra lines are printed under the table, and in the error output
+    when the answer is written as a file.
     """
     fmt = _format_of(args)
+    extra = list(notes or [])
 
     if fmt == "table":
         _print_status(args, results)
@@ -589,6 +762,8 @@ def _finish(
         print(render_result(rows, columns, payload, fmt))
         if not rows and not all(result.is_ok for result in results.values()):
             print("No provider could answer with data.")
+        for line in extra:
+            print(line)
         return _exit_code(results) if exit_code is None else exit_code
 
     if fmt == "csv":
@@ -597,6 +772,8 @@ def _finish(
         print(render_status_line(results), file=sys.stderr)
         if getattr(args, "verbose", False):
             print(render_verbose_details(results), file=sys.stderr)
+        for line in extra:
+            print(line, file=sys.stderr)
     elif getattr(args, "verbose", False):
         print(render_status_line(results), file=sys.stderr)
         print(render_verbose_details(results), file=sys.stderr)
@@ -619,6 +796,7 @@ def _cmd_search(args: argparse.Namespace) -> int:
     limit = _limit_of(args)
     near = _point_of(args.near, "the near point") if args.near else None
     radius = args.radius
+    types = _types_of(args)
 
     def action(provider: Provider) -> List[Place]:
         return provider.search_places(
@@ -627,12 +805,11 @@ def _cmd_search(args: argparse.Namespace) -> int:
 
     results = _call_providers(settings, providers, "search", action)
 
+    places, type_report = _filter_by_types(results, providers, types)
+
     rows: List[Dict[str, Any]] = []
     for name in providers:
-        result = results.get(name)
-        if result is None or not result.is_ok:
-            continue
-        for place in result.data:
+        for place in places.get(name, []):
             row: Dict[str, Any] = {
                 "provider": name,
                 "name": place.name,
@@ -659,15 +836,26 @@ def _cmd_search(args: argparse.Namespace) -> int:
             "limit": limit,
             "near": list(near) if near else None,
             "radius": radius,
+            "types": types,
         },
         "providers": render_status_payload(results),
         "results": {
-            name: [_place_dict(place) for place in results[name].data]
+            name: [_place_dict(place) for place in places[name]]
             for name in providers
-            if name in results and results[name].is_ok
+            if name in places
         },
+        "type_filter": _type_payload(types, type_report),
     }
-    return _finish(args, rows, columns, payload, results)
+    exit_code = _exit_code_of_types(places) if types else None
+    return _finish(
+        args,
+        rows,
+        columns,
+        payload,
+        results,
+        exit_code=exit_code,
+        notes=_type_lines(types, type_report),
+    )
 
 
 def _cmd_geocode(args: argparse.Namespace) -> int:
@@ -788,12 +976,17 @@ def _cmd_route(args: argparse.Namespace) -> int:
     mode = args.mode
     from_text = args.from_point
     to_text = args.to_point
+    city = _text_of(args.city, "city") if args.city is not None else None
 
     def action(provider: Provider) -> Route:
         origin = _resolve_point(provider, from_text, "the start point")
         destination = _resolve_point(provider, to_text, "the end point")
         provider_mode = ROUTE_MODES.get(mode, {}).get(provider.name, mode)
-        return provider.route(origin, destination, mode=provider_mode)
+        if city is None:
+            # A provider that does not know the city is called the same
+            # way as it was called before the city was an option.
+            return provider.route(origin, destination, mode=provider_mode)
+        return provider.route(origin, destination, mode=provider_mode, city=city)
 
     results = _call_providers(settings, providers, "route", action)
 
@@ -1006,6 +1199,8 @@ def _cmd_compare(args: argparse.Namespace) -> int:
     limit = _limit_of(args)
     near = _point_of(args.near, "the near point") if args.near else None
     radius = args.radius
+    types = _types_of(args)
+    rules = _cluster_rules(args, settings.config)
 
     def action(provider: Provider) -> List[Place]:
         return provider.search_places(
@@ -1014,25 +1209,21 @@ def _cmd_compare(args: argparse.Namespace) -> int:
 
     results = _call_providers(settings, providers, "search", action)
 
-    places: Dict[str, List[Place]] = {}
+    places, type_report = _filter_by_types(results, providers, types)
+
     skipped: Dict[str, str] = {}
     for name in providers:
         result = results.get(name)
         if result is None:
             continue
-        if result.is_ok:
-            places[name] = result.data
-        else:
+        if not result.is_ok:
             skipped[name] = _reason_of(result)
 
-    comparison = compare_places(places, centre=near, skipped=skipped)
+    comparison = compare_places(places, centre=near, skipped=skipped, **rules)
 
     rows: List[Dict[str, Any]] = []
     for name in providers:
-        result = results.get(name)
-        if result is None or not result.is_ok:
-            continue
-        for place in result.data:
+        for place in places.get(name, []):
             row = {
                 "provider": name,
                 "name": place.name,
@@ -1058,18 +1249,24 @@ def _cmd_compare(args: argparse.Namespace) -> int:
             "limit": limit,
             "near": list(near) if near else None,
             "radius": radius,
+            "types": types,
         },
         "providers": render_status_payload(results),
         "results": comparison,
+        "type_filter": _type_payload(types, type_report),
     }
+
+    exit_code = _exit_code_of_types(places) if types else None
 
     fmt = _format_of(args)
     if fmt == "table":
         _print_status(args, results)
         print("")
         print(render_table(rows, columns, "Places"))
+        for line in _type_lines(types, type_report):
+            print(line)
         _print_comparison(comparison)
-        return _exit_code(results)
+        return _exit_code(results) if exit_code is None else exit_code
 
     if fmt == "csv":
         # The CSV holds the places, then the clusters, then the consensus.
@@ -1078,10 +1275,20 @@ def _cmd_compare(args: argparse.Namespace) -> int:
         print(render_status_line(results), file=sys.stderr)
         if getattr(args, "verbose", False):
             print(render_verbose_details(results), file=sys.stderr)
+        for line in _type_lines(types, type_report):
+            print(line, file=sys.stderr)
         print(render_csv(csv_rows, csv_columns))
-        return _exit_code(results)
+        return _exit_code(results) if exit_code is None else exit_code
 
-    return _finish(args, rows, columns, payload, results)
+    return _finish(
+        args,
+        rows,
+        columns,
+        payload,
+        results,
+        exit_code=exit_code,
+        notes=_type_lines(types, type_report),
+    )
 
 
 def _compare_csv_rows(
@@ -1368,12 +1575,23 @@ def _weather_row(provider: str, item: Dict[str, Any], date: str) -> Dict[str, An
 
 
 def _cmd_providers(args: argparse.Namespace) -> int:
-    """Run the providers command."""
+    """Run the providers command.
+
+    The first table shows the features of the channel of every provider.
+    The second one shows the route modes and the limits of that channel,
+    so that the table never promises more than the provider can do. The
+    lines under them say what the other channel would open.
+    """
     settings = Settings(args)
 
+    wanted = getattr(args, "channel", None)
+    forced = Channel(wanted) if wanted else None
+
     rows: List[Dict[str, Any]] = []
+    mode_rows: List[Dict[str, Any]] = []
+    opens: List[Dict[str, Any]] = []
     for name in PROVIDER_NAMES:
-        provider = get_provider(name, settings.config, settings.http)
+        provider = get_provider(name, settings.config, settings.http, forced)
         channel = provider.active_channel()
         key = settings.config.key_for(name)
         row: Dict[str, Any] = {
@@ -1382,19 +1600,69 @@ def _cmd_providers(args: argparse.Namespace) -> int:
             "channel": str(channel),
             "key": Config.mask_key(key) if key else "not set",
         }
+        features = provider.features_for(channel)
         for feature in FEATURES:
-            row[feature] = "yes" if feature in provider.features_for(channel) else "no"
+            row[feature] = "yes" if feature in features else "no"
         rows.append(row)
 
+        modes = provider.modes_for(channel)
+        limits = provider.limits_for(channel)
+        mode_rows.append(
+            {
+                "provider": name,
+                "channel": str(channel),
+                "modes": ", ".join(sorted(modes)) if modes else "-",
+                "limits": "; ".join(limits) if limits else "-",
+            }
+        )
+
+        # What the other channel of the provider would open.
+        others = [item for item in provider.channels() if item != channel]
+        if others:
+            extra = sorted(provider.features_for(others[0]) - features)
+            if extra:
+                opens.append(
+                    {
+                        "provider": name,
+                        "channel": str(others[0]),
+                        "features": extra,
+                    }
+                )
+
     columns = ["provider", "name", "channel", "key"] + list(FEATURES)
+    mode_columns = ["provider", "channel", "modes", "limits"]
+
     payload = {
         "command": "providers",
         "results": rows,
+        "route_modes": mode_rows,
+        "opens": opens,
     }
+
     fmt = _format_of(args)
     if fmt == "table":
         print(render_table(rows, columns, "Providers"))
+        print("")
+        print(render_table(mode_rows, mode_columns, "Route modes and limits"))
+        if opens:
+            print("")
+            print("A key of your own opens:")
+            for item in opens:
+                print(
+                    "  {0}: the {1} channel opens {2}".format(
+                        item["provider"], item["channel"], ", ".join(item["features"])
+                    )
+                )
         return 0
+
+    if fmt == "csv":
+        csv_columns = columns + ["modes", "limits"]
+        csv_rows: List[Dict[str, Any]] = list(rows)
+        csv_rows.append({"provider": "[route modes]"})
+        csv_rows.extend(mode_rows)
+        print(render_csv(csv_rows, csv_columns))
+        return 0
+
     print(render_result(rows, columns, payload, fmt))
     return 0
 
@@ -1515,6 +1783,9 @@ def _cmd_config_show(args: argparse.Namespace) -> int:
         ("retries", str(config.retries)),
         ("jobs", str(config.jobs)),
         ("cache_dir", config.cache_dir),
+        ("cluster_radius", str(config.cluster_radius)),
+        ("name_ratio", str(config.name_ratio)),
+        ("same_place_radius", str(config.same_place_radius)),
     ]
 
     rows = [{"setting": name, "value": value} for name, value in values]

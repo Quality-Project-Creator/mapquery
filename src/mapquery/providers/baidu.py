@@ -62,6 +62,26 @@ class BaiduProvider(Provider):
             return set(OFFICIAL_FEATURES)
         return set(DIRECT_FEATURES)
 
+    def modes_for(self, channel: Channel) -> Set[str]:
+        """Return the route modes this provider can do on one channel.
+
+        Baidu has a driving route on the official API. The other modes
+        are not part of the tool, so they are not offered.
+        """
+        if channel == Channel.OFFICIAL:
+            return {"driving"}
+        return set()
+
+    def limits_for(self, channel: Channel) -> List[str]:
+        """Return the limits of Baidu on one channel.
+
+        The nearby search needs the official channel, because the web
+        route of Baidu has no route for it.
+        """
+        if channel == Channel.DIRECT:
+            return ["a nearby search needs the official channel"]
+        return []
+
     # ------------------------------------------------------------------
     # POI search
     # ------------------------------------------------------------------
@@ -80,8 +100,11 @@ class BaiduProvider(Provider):
         if near is not None:
             # The nearby search cannot be done on the direct channel. The
             # web route of Baidu has no route for it. The official channel
-            # can do it, with the key of the user.
-            raise self.not_supported("search with a near filter")
+            # can do it, with the key of the user, so the status says
+            # that one key would open it.
+            raise self.limit_error(
+                "search with a near filter", other_channel_can=True
+            )
         return self._search_direct(keyword, city, limit)
 
     def _search_direct(self, keyword: str, city: Optional[str], limit: int) -> List[Place]:
@@ -552,8 +575,12 @@ class BaiduProvider(Provider):
         origin: Coord,
         destination: Coord,
         mode: str = "driving",
+        city: Optional[str] = None,
     ) -> Route:
-        """Find a route between two GCJ-02 points."""
+        """Find a route between two GCJ-02 points.
+
+        Baidu needs no city for a route, so the city is ignored.
+        """
         if self.active_channel() == Channel.OFFICIAL:
             return self._route_official(origin, destination, mode)
         raise self.not_supported("route")
@@ -625,11 +652,13 @@ class BaiduProvider(Provider):
                     }
                 )
 
+        distance_m, duration_s = self._route_numbers(first, self.display_name)
+
         return Route(
             provider=self.name,
             mode=mode,
-            distance_m=self._as_float(first.get("distance")),
-            duration_s=self._as_float(first.get("duration")),
+            distance_m=distance_m,
+            duration_s=duration_s,
             origin=origin,
             destination=destination,
             steps=steps,

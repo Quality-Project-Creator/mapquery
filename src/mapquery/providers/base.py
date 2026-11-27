@@ -11,7 +11,7 @@ active channel cannot do raises ProviderError with the status
 NOT_SUPPORTED. The tool never invents a result.
 """
 
-from typing import Any, Dict, List, Optional, Set
+from typing import Any, Dict, List, Optional, Set, Tuple
 
 from ..config import Config
 from ..http import HttpClient
@@ -139,7 +139,45 @@ class Provider:
         """
         if feature in self.key_features and not self.has_own_key():
             return ProviderStatus.NOT_CONFIGURED
+        for channel in self.channels():
+            if channel == self.active_channel():
+                continue
+            # The other channel of the same provider can do it. The user
+            # only needs one key for that, so the status is
+            # not_configured and not not_supported.
+            if feature in self.features_for(channel) and not self.has_own_key():
+                return ProviderStatus.NOT_CONFIGURED
         return ProviderStatus.NOT_SUPPORTED
+
+    def limits_for(self, channel: Channel) -> List[str]:
+        """Return the limits of this provider on one channel.
+
+        A limit is something that the channel cannot do, such as a
+        nearby search. The text is short, so it fits in one cell of the
+        table of the providers command.
+        """
+        return []
+
+    def limit_error(
+        self,
+        feature: str,
+        other_channel_can: bool = False,
+    ) -> ProviderError:
+        """Return the error for something the active channel cannot do.
+
+        When the other channel of the provider can do it and the user
+        did not set a key, the status is not_configured. The user then
+        learns that one key would open it, instead of being told that
+        the provider cannot do it at all.
+        """
+        if other_channel_can and not self.has_own_key():
+            return ProviderError(
+                "{0} needs the key {1} for {2}".format(
+                    self.display_name, self.key_env_var, feature
+                ),
+                ProviderStatus.NOT_CONFIGURED,
+            )
+        return self.not_supported(feature)
 
     def missing_feature_error(self, feature: str) -> ProviderError:
         """Return the error for a feature the active channel cannot do."""
@@ -178,8 +216,13 @@ class Provider:
         origin: Coord,
         destination: Coord,
         mode: str = "driving",
+        city: Optional[str] = None,
     ) -> Route:
-        """Find a route between two GCJ-02 points."""
+        """Find a route between two GCJ-02 points.
+
+        The city is only used by the providers that need it, such as
+        the transit route of Amap. The other providers ignore it.
+        """
         raise self.not_supported("route")
 
     def district(self, keyword: str) -> List[Dict[str, Any]]:
@@ -234,6 +277,32 @@ class Provider:
             else:
                 points.append((value_a, value_b))
         return points
+
+    def _route_numbers(
+        self,
+        path: Dict[str, Any],
+        provider: str,
+    ) -> Tuple[float, float]:
+        """Return the distance and the duration of one route.
+
+        A reply without a distance or without a duration is a broken
+        route, not a route of zero metres. The tool says so instead of
+        showing a number that is not true.
+        """
+        if path.get("distance") is None:
+            raise ProviderError(
+                "{0} sent a route without a distance".format(provider),
+                ProviderStatus.ERROR,
+            )
+        if path.get("duration") is None:
+            raise ProviderError(
+                "{0} sent a route without a duration".format(provider),
+                ProviderStatus.ERROR,
+            )
+        return (
+            self._as_float(path.get("distance")),
+            self._as_float(path.get("duration")),
+        )
 
     def _make_step(
         self,

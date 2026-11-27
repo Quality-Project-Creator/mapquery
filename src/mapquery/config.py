@@ -12,6 +12,8 @@ import sys
 from dataclasses import dataclass, field
 from typing import Any, Dict, Optional
 
+from .compare import MATCH_DISTANCE_M, MATCH_NAME_RATIO, SAME_PLACE_DISTANCE_M
+
 # The name of the environment variable that holds the config file path.
 CONFIG_PATH_ENV = "MAPQUERY_CONFIG"
 
@@ -220,6 +222,9 @@ class Config:
     jobs: int = 8
     cache_dir: str = DEFAULT_CACHE_DIR
     rate_limits: Dict[str, float] = field(default_factory=lambda: dict(DEFAULT_RATE_LIMITS))
+    cluster_radius: float = MATCH_DISTANCE_M
+    name_ratio: float = MATCH_NAME_RATIO
+    same_place_radius: float = SAME_PLACE_DISTANCE_M
 
     @staticmethod
     def mask_key(value: str) -> str:
@@ -276,6 +281,14 @@ class Config:
         )
         config.tencent_sk = os.environ.get(ENV_VARS["tencent_sk"]) or _as_text(
             _pick(data, "tencent", ("sk", "tencent_sk"))
+        )
+
+        config.cluster_radius = _as_float(
+            data.get("cluster_radius"), config.cluster_radius
+        )
+        config.name_ratio = _as_float(data.get("name_ratio"), config.name_ratio)
+        config.same_place_radius = _as_float(
+            data.get("same_place_radius"), config.same_place_radius
         )
 
         config.timeout = _as_float(data.get("timeout"), config.timeout)

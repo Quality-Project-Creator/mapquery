@@ -56,21 +56,31 @@ def distance_between(first: Place, second: Place) -> float:
     return haversine_m(first.lng, first.lat, second.lng, second.lat)
 
 
-def is_same_place(first: Place, second: Place) -> bool:
+def is_same_place(
+    first: Place,
+    second: Place,
+    match_distance_m: float = MATCH_DISTANCE_M,
+    name_ratio: float = MATCH_NAME_RATIO,
+    same_place_distance_m: float = SAME_PLACE_DISTANCE_M,
+) -> bool:
     """Return True when two places are the same place.
 
     They are the same place when they are close and their names look
     alike, or when they are very close. The second rule catches the same
     building under two different names. It holds for any two places, also
     for two places of one provider.
+
+    The three numbers are the settings of the tool. The caller can change
+    them, so that only the closest places are matched or that places
+    that are further apart are matched too.
     """
     gap = distance_between(first, second)
-    if gap <= SAME_PLACE_DISTANCE_M:
+    if gap <= same_place_distance_m:
         return True
-    if gap > MATCH_DISTANCE_M:
+    if gap > match_distance_m:
         return False
     ratio = name_similarity(normalise_name(first.name), normalise_name(second.name))
-    return ratio >= MATCH_NAME_RATIO
+    return ratio >= name_ratio
 
 
 class _UnionFind:
@@ -150,6 +160,9 @@ def compare_places(
     places_by_provider: Dict[str, List[Place]],
     centre: Optional[Coord] = None,
     skipped: Optional[Dict[str, str]] = None,
+    match_distance_m: float = MATCH_DISTANCE_M,
+    name_ratio: float = MATCH_NAME_RATIO,
+    same_place_distance_m: float = SAME_PLACE_DISTANCE_M,
 ) -> Dict[str, Any]:
     """Compare the places that the providers answered with.
 
@@ -157,8 +170,12 @@ def compare_places(
     providers whose answer was ok should be in it. The centre is the
     point of the search in GCJ-02 order. It is optional.
 
-    The answer holds the clusters, the consensus, the spread and the
-    places of every provider.
+    The three numbers are the rules of the match. They have the values
+    that the module holds as its own, so the answer of a run without
+    settings stays the same as it was.
+
+    The answer holds the clusters, the consensus, the spread, the places
+    of every provider and the rules that were used.
     """
     providers = list(places_by_provider.keys())
 
@@ -172,16 +189,24 @@ def compare_places(
         for second in range(first + 1, len(entries)):
             first_place = entries[first][1]
             second_place = entries[second][1]
-            if distance_between(first_place, second_place) <= SAME_PLACE_DISTANCE_M:
-                # The 25 metre rule holds for any two places, also for two
-                # places of one provider.
+            if (
+                distance_between(first_place, second_place) <= same_place_distance_m
+            ):
+                # The rule of the same building holds for any two places,
+                # also for two places of one provider.
                 groups.union(first, second)
                 continue
             if entries[first][0] == entries[second][0]:
                 # Two places of one provider that are further apart are two
                 # different places, also when they have the same name.
                 continue
-            if is_same_place(first_place, second_place):
+            if is_same_place(
+                first_place,
+                second_place,
+                match_distance_m=match_distance_m,
+                name_ratio=name_ratio,
+                same_place_distance_m=same_place_distance_m,
+            ):
                 groups.union(first, second)
 
     # Keep the order of the clusters the same as the order of the answers.
@@ -240,4 +265,9 @@ def compare_places(
         "consensus": consensus,
         "spread": spread,
         "skipped": dict(skipped) if skipped else {},
+        "settings": {
+            "match_distance_m": float(match_distance_m),
+            "name_ratio": float(name_ratio),
+            "same_place_distance_m": float(same_place_distance_m),
+        },
     }

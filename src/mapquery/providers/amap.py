@@ -75,6 +75,16 @@ class AmapProvider(Provider):
             return set(OFFICIAL_MODES)
         return set(DIRECT_MODES)
 
+    def limits_for(self, channel: Channel) -> List[str]:
+        """Return the limits of Amap on one channel.
+
+        The transit route of Amap needs the city of the start point, so
+        the city has to be given with the route command.
+        """
+        if channel == Channel.OFFICIAL:
+            return ["a transit route needs the city of the start point"]
+        return []
+
     # ------------------------------------------------------------------
     # POI search
     # ------------------------------------------------------------------
@@ -252,8 +262,13 @@ class AmapProvider(Provider):
         origin: Coord,
         destination: Coord,
         mode: str = "driving",
+        city: Optional[str] = None,
     ) -> Route:
-        """Find a route between two GCJ-02 points."""
+        """Find a route between two GCJ-02 points.
+
+        The transit route of Amap needs the city of the start point. The
+        other routes do not need it, so they ignore it.
+        """
         channel = self.active_channel()
         if mode not in self.modes_for(channel):
             raise self.mode_error(mode)
@@ -265,6 +280,12 @@ class AmapProvider(Provider):
                 "key": self.config.amap_key,
                 "output": "json",
             }
+            if mode == "transit":
+                # The transit route of Amap needs the city of the start
+                # point, and it only gives the whole plan when the
+                # extension is "all".
+                params["city"] = city or ALL_CHINA
+                params["extensions"] = "all"
             body = self.http.get_json(
                 self._official_route_url(mode),
                 params=params,
@@ -298,16 +319,34 @@ class AmapProvider(Provider):
 
         The v3 route holds its paths under route.paths. The v4 route,
         which is the one that knows the cycling mode, holds them under
-        data.paths. Both shapes are read here, and both give the same
-        steps.
+        data.paths. The transit route holds its plans under
+        route.transits. All three shapes are read here, and all of them
+        give the same steps.
         """
         self._check_status(body)
         if not isinstance(body, dict):
             raise ProviderError("Amap sent no data", ProviderStatus.ERROR)
+
         paths = self._route_paths(body)
-        if not paths:
-            raise ProviderError("Amap found no route", ProviderStatus.ERROR)
-        first = self._dict(paths[0])
+        if paths:
+            return self._path_route(paths[0], body, origin, destination, mode)
+
+        transit = self._transit_route(body, origin, destination, mode)
+        if transit is not None:
+            return transit
+
+        raise ProviderError("Amap found no route", ProviderStatus.ERROR)
+
+    def _path_route(
+        self,
+        path: Any,
+        body: Any,
+        origin: Coord,
+        destination: Coord,
+        mode: str,
+    ) -> Route:
+        """Turn one path of a route reply into a route."""
+        first = self._dict(path)
 
         steps: List[Dict[str, Any]] = []
         raw_steps = first.get("steps")
@@ -325,11 +364,114 @@ class AmapProvider(Provider):
                     )
                 )
 
+        distance_m, duration_s = self._route_numbers(first, self.display_name)
+
         return Route(
             provider=self.name,
             mode=mode,
-            distance_m=self._as_float(first.get("distance")),
-            duration_s=self._as_float(first.get("duration")),
+            distance_m=distance_m,
+            duration_s=duration_s,
+            origin=origin,
+            destination=destination,
+            steps=steps,
+            raw=body,
+        )
+
+    def _transit_route(
+        self,
+        body: Dict[str, Any],
+        origin: Coord,
+        destination: Coord,
+        mode: str,
+    ) -> Optional[Route]:
+        """Turn a transit reply into a route.
+
+        The transit reply of Amap holds its plans under route.transits.
+        A plan holds its legs under segments. A leg holds the walking
+        part under walking and the bus part under bus.
+
+        The distance of the route is the sum of the walking parts and of
+        the bus lines. The time of the route is the one of the plan. When
+        the reply does not hold them, None is returned, so that the
+        caller says that no route was found instead of showing a number
+        that is not true.
+        """
+        route = self._dict(body.get("route"))
+        transits = route.get("transits")
+        if not isinstance(transits, list) or not transits:
+            return None
+
+        plan = self._dict(transits[0])
+        segments = plan.get("segments")
+        if not isinstance(segments, list) or not segments:
+            return None
+
+        steps: List[Dict[str, Any]] = []
+        distance = 0.0
+        duration = 0.0
+        have_distance = False
+        have_duration = False
+
+        for raw_segment in segments:
+            segment = self._dict(raw_segment)
+
+            walking = self._dict(segment.get("walking"))
+            if walking.get("distance") is not None:
+                distance += self._as_float(walking.get("distance"))
+                have_distance = True
+            if walking.get("duration") is not None:
+                duration += self._as_float(walking.get("duration"))
+                have_duration = True
+            raw_steps = walking.get("steps")
+            if isinstance(raw_steps, list):
+                for raw_step in raw_steps:
+                    step = self._dict(raw_step)
+                    steps.append(
+                        self._make_step(
+                            step.get("instruction"),
+                            step.get("road"),
+                            step.get("distance"),
+                            step.get("duration"),
+                            self._parse_polyline(step.get("polyline")),
+                            step.get("action"),
+                        )
+                    )
+
+            bus = self._dict(segment.get("bus"))
+            buslines = bus.get("buslines")
+            if isinstance(buslines, list):
+                for raw_line in buslines:
+                    line = self._dict(raw_line)
+                    if line.get("distance") is not None:
+                        distance += self._as_float(line.get("distance"))
+                        have_distance = True
+                    if line.get("duration") is not None:
+                        duration += self._as_float(line.get("duration"))
+                        have_duration = True
+                    # A bus line has no instruction of its own. The name
+                    # of the line is what the reply gives.
+                    steps.append(
+                        self._make_step(
+                            "",
+                            line.get("name"),
+                            line.get("distance"),
+                            line.get("duration"),
+                            self._parse_polyline(line.get("polyline")),
+                        )
+                    )
+
+        if not have_distance or not have_duration:
+            return None
+
+        if plan.get("duration") is not None:
+            # The plan holds the time that the whole trip takes.
+            duration = self._as_float(plan.get("duration"))
+
+        return Route(
+            provider=self.name,
+            mode=mode,
+            distance_m=distance,
+            duration_s=duration,
             origin=origin,
             destination=destination,
             steps=steps,

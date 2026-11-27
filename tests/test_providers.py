@@ -5,7 +5,7 @@ Every test reads a recorded fixture. No test touches the network.
 
 import json
 import os
-from typing import Any, Optional
+from typing import Any, Dict, Optional
 
 import pytest
 
@@ -843,3 +843,237 @@ def test_a_mode_that_no_channel_can_do_stays_not_supported() -> None:
     error = provider.mode_error("flying")
 
     assert error.status == ProviderStatus.NOT_SUPPORTED
+
+
+# ----------------------------------------------------------------------
+# The status of a feature that the other channel can do
+# ----------------------------------------------------------------------
+
+
+def test_the_baidu_route_without_a_key_says_that_a_key_would_fix_it() -> None:
+    """Baidu has a driving route on the official API."""
+    baidu = make_provider("baidu")
+
+    error = baidu.missing_feature_error("route")
+
+    assert error.status == ProviderStatus.NOT_CONFIGURED
+    assert "BAIDU_MAP_AK" in error.message
+
+
+def test_the_baidu_nearby_search_says_that_a_key_would_fix_it() -> None:
+    """The nearby search of Baidu needs the official channel."""
+    baidu = make_provider("baidu")
+
+    with pytest.raises(ProviderError) as info:
+        baidu.search_places("天安门", near=(116.3975, 39.9088))
+
+    assert info.value.status == ProviderStatus.NOT_CONFIGURED
+    assert "BAIDU_MAP_AK" in info.value.message
+
+
+def test_the_tencent_nearby_search_is_not_supported() -> None:
+    """No channel of Tencent can do a nearby search."""
+    tencent = make_provider("tencent")
+
+    with pytest.raises(ProviderError) as info:
+        tencent.search_places("天安门", near=(116.3975, 39.9088))
+
+    assert info.value.status == ProviderStatus.NOT_SUPPORTED
+
+
+def test_the_providers_say_what_their_limits_are() -> None:
+    """Every provider says what its channel cannot do."""
+    baidu = make_provider("baidu")
+    assert baidu.limits_for(Channel.DIRECT) == [
+        "a nearby search needs the official channel"
+    ]
+    assert baidu.limits_for(Channel.OFFICIAL) == []
+
+    tencent = make_provider("tencent")
+    assert tencent.limits_for(Channel.DIRECT) == ["a nearby search is not available"]
+    assert tencent.limits_for(Channel.OFFICIAL) == ["a nearby search is not available"]
+
+    amap = make_provider("amap")
+    assert amap.limits_for(Channel.DIRECT) == []
+    assert amap.limits_for(Channel.OFFICIAL) == [
+        "a transit route needs the city of the start point"
+    ]
+
+
+def test_the_route_modes_of_every_provider_are_known() -> None:
+    """The matrix of the route modes is the truth."""
+    baidu = make_provider("baidu")
+    assert baidu.modes_for(Channel.DIRECT) == set()
+    assert baidu.modes_for(Channel.OFFICIAL) == {"driving"}
+
+    amap = make_provider("amap")
+    assert amap.modes_for(Channel.DIRECT) == {"driving"}
+    assert "bicycling" in amap.modes_for(Channel.OFFICIAL)
+
+    tencent = make_provider("tencent")
+    assert tencent.modes_for(Channel.DIRECT) == {
+        "driving",
+        "walking",
+        "bicycling",
+        "transit",
+    }
+
+
+# ----------------------------------------------------------------------
+# The transit route of Amap
+# ----------------------------------------------------------------------
+
+# The shape of the transit reply of Amap, written by hand from the
+# documented shape of the direction/transit/integrated route. It was not
+# recorded from the live endpoint, because no Amap key was available
+# when it was written. The walking part and the bus line of the reply
+# hold the distance and the duration of that part.
+AMAP_TRANSIT = {
+    "status": "1",
+    "info": "OK",
+    "infocode": "10000",
+    "count": "1",
+    "route": {
+        "origin": "116.397428,39.908823",
+        "destination": "116.396670,39.908640",
+        "distance": 300,
+        "transits": [
+            {
+                "cost": 2,
+                "duration": 2143,
+                "walking_distance": 300,
+                "segments": [
+                    {
+                        "walking": {
+                            "origin": "116.397428,39.908823",
+                            "destination": "116.397502,39.908895",
+                            "distance": 300,
+                            "duration": 240,
+                            "steps": [
+                                {
+                                    "instruction": "往东北方向步行300米",
+                                    "road": "东长安街",
+                                    "distance": 300,
+                                    "duration": 240,
+                                    "polyline": "116.397428,39.908823;116.397502,39.908895",
+                                    "action": "步行",
+                                }
+                            ],
+                        },
+                        "bus": {
+                            "buslines": [
+                                {
+                                    "name": "1路",
+                                    "distance": 8000,
+                                    "duration": 1500,
+                                    "polyline": "116.397502,39.908895;116.396670,39.908640",
+                                }
+                            ]
+                        },
+                    }
+                ],
+            }
+        ],
+    },
+}
+
+
+def test_the_amap_transit_reply_gives_a_route() -> None:
+    """The transit reply of Amap is read as a route."""
+    amap = make_provider("amap", channel=Channel.OFFICIAL, amap_key="test-key")
+
+    route = amap.parse_route(
+        AMAP_TRANSIT,
+        (116.397428, 39.908823),
+        (116.396670, 39.908640),
+        "transit",
+    )
+
+    # The distance is the sum of the walking part and of the bus line.
+    assert route.distance_m == 8300.0
+    # The time of the route is the one of the plan.
+    assert route.duration_s == 2143.0
+    assert route.mode == "transit"
+    # The walking step and the bus line.
+    assert len(route.steps) == 2
+    assert route.steps[0]["distance_m"] == 300.0
+    assert route.steps[1]["road"] == "1路"
+    assert route.steps[1]["distance_m"] == 8000.0
+
+
+def test_an_amap_transit_reply_without_the_numbers_is_no_route() -> None:
+    """A reply without the numbers of the route is not a route."""
+    body = json.loads(json.dumps(AMAP_TRANSIT))
+    del body["route"]["transits"][0]["segments"][0]["bus"]["buslines"][0]["distance"]
+    del body["route"]["transits"][0]["segments"][0]["walking"]["distance"]
+
+    amap = make_provider("amap", channel=Channel.OFFICIAL, amap_key="test-key")
+
+    with pytest.raises(ProviderError) as info:
+        amap.parse_route(
+            body,
+            (116.397428, 39.908823),
+            (116.396670, 39.908640),
+            "transit",
+        )
+
+    assert info.value.status == ProviderStatus.ERROR
+
+
+def test_the_amap_transit_request_carries_the_city() -> None:
+    """The transit route of Amap needs the city of the start point."""
+    amap = make_provider("amap", channel=Channel.OFFICIAL, amap_key="test-key")
+    asked: Dict[str, Any] = {}
+
+    def fake_get_json(url: str, params: Any = None, **kwargs: Any) -> Any:
+        asked["url"] = url
+        asked["params"] = params
+        return AMAP_TRANSIT
+
+    amap.http.get_json = fake_get_json  # type: ignore[assignment]
+
+    amap.route(
+        (116.397428, 39.908823),
+        (116.396670, 39.908640),
+        mode="transit",
+        city="Beijing",
+    )
+
+    assert asked["url"].endswith("direction/transit/integrated")
+    assert asked["params"]["city"] == "Beijing"
+    assert asked["params"]["extensions"] == "all"
+
+
+# ----------------------------------------------------------------------
+# A route without numbers is not a route of zero metres
+# ----------------------------------------------------------------------
+
+
+def test_a_tencent_route_without_a_distance_is_an_error() -> None:
+    """The tool does not show a route of zero metres that is not there."""
+    tencent = make_provider("tencent")
+    body = {"status": 0, "result": {"routes": [{"duration": 600}]}}
+
+    with pytest.raises(ProviderError) as info:
+        tencent.parse_route(
+            body, (116.397428, 39.908823), (116.396670, 39.908640)
+        )
+
+    assert info.value.status == ProviderStatus.ERROR
+
+
+def test_an_amap_route_without_a_duration_is_an_error() -> None:
+    """The same holds for the v4 route of Amap."""
+    amap = make_provider("amap", channel=Channel.OFFICIAL, amap_key="test-key")
+    body = {
+        "errcode": 0,
+        "errmsg": "OK",
+        "data": {"paths": [{"distance": 215}]},
+    }
+
+    with pytest.raises(ProviderError) as info:
+        amap.parse_route(
+            body, (116.397428, 39.908823), (116.396670, 39.908640)
+        )
+
+    assert info.value.status == ProviderStatus.ERROR
