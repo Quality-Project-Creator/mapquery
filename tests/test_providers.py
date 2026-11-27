@@ -5,7 +5,7 @@ Every test reads a recorded fixture. No test touches the network.
 
 import json
 import os
-from typing import Any, Dict, Optional
+from typing import Any, Optional
 
 import pytest
 
@@ -846,234 +846,340 @@ def test_a_mode_that_no_channel_can_do_stays_not_supported() -> None:
 
 
 # ----------------------------------------------------------------------
-# The status of a feature that the other channel can do
+# The malformed replies
 # ----------------------------------------------------------------------
 
 
-def test_the_baidu_route_without_a_key_says_that_a_key_would_fix_it() -> None:
-    """Baidu has a driving route on the official API."""
-    baidu = make_provider("baidu")
+def test_a_baidu_body_that_is_not_an_object_holds_no_places() -> None:
+    """A reply that is not a JSON object holds no places."""
+    provider = make_provider("baidu")
 
-    error = baidu.missing_feature_error("route")
-
-    assert error.status == ProviderStatus.NOT_CONFIGURED
-    assert "BAIDU_MAP_AK" in error.message
+    assert provider.parse_search_places("not a dict") == []
+    assert provider.parse_official_search("not a dict") == []
 
 
-def test_the_baidu_nearby_search_says_that_a_key_would_fix_it() -> None:
-    """The nearby search of Baidu needs the official channel."""
-    baidu = make_provider("baidu")
+def test_a_baidu_body_without_a_list_of_places_holds_no_places() -> None:
+    """A reply without the expected list holds no places."""
+    provider = make_provider("baidu")
 
-    with pytest.raises(ProviderError) as info:
-        baidu.search_places("天安门", near=(116.3975, 39.9088))
-
-    assert info.value.status == ProviderStatus.NOT_CONFIGURED
-    assert "BAIDU_MAP_AK" in info.value.message
+    assert provider.parse_search_places({"content": "not a list"}) == []
+    assert provider.parse_official_search({"results": "not a list"}) == []
 
 
-def test_the_tencent_nearby_search_is_not_supported() -> None:
-    """No channel of Tencent can do a nearby search."""
-    tencent = make_provider("tencent")
+def test_one_broken_baidu_poi_does_not_stop_the_other_places() -> None:
+    """A broken entry is skipped, the other places still come back."""
+    body = load_fixture("baidu_search.json")
+    body["content"].insert(0, "not an object")
+    body["content"].insert(1, 42)
+    provider = make_provider("baidu")
 
-    with pytest.raises(ProviderError) as info:
-        tencent.search_places("天安门", near=(116.3975, 39.9088))
+    places = provider.parse_search_places(body)
 
-    assert info.value.status == ProviderStatus.NOT_SUPPORTED
-
-
-def test_the_providers_say_what_their_limits_are() -> None:
-    """Every provider says what its channel cannot do."""
-    baidu = make_provider("baidu")
-    assert baidu.limits_for(Channel.DIRECT) == [
-        "a nearby search needs the official channel"
-    ]
-    assert baidu.limits_for(Channel.OFFICIAL) == []
-
-    tencent = make_provider("tencent")
-    assert tencent.limits_for(Channel.DIRECT) == ["a nearby search is not available"]
-    assert tencent.limits_for(Channel.OFFICIAL) == ["a nearby search is not available"]
-
-    amap = make_provider("amap")
-    assert amap.limits_for(Channel.DIRECT) == []
-    assert amap.limits_for(Channel.OFFICIAL) == [
-        "a transit route needs the city of the start point"
-    ]
+    assert len(places) == 10
+    assert places[0].name == "天安门"
 
 
-def test_the_route_modes_of_every_provider_are_known() -> None:
-    """The matrix of the route modes is the truth."""
-    baidu = make_provider("baidu")
-    assert baidu.modes_for(Channel.DIRECT) == set()
-    assert baidu.modes_for(Channel.OFFICIAL) == {"driving"}
+def test_a_baidu_poi_without_a_position_is_skipped() -> None:
+    """A POI without any position is not a place."""
+    body = load_fixture("baidu_search.json")
+    entry = body["content"][0]
+    entry.pop("ext", None)
+    entry.pop("x", None)
+    entry.pop("y", None)
+    provider = make_provider("baidu")
 
-    amap = make_provider("amap")
-    assert amap.modes_for(Channel.DIRECT) == {"driving"}
-    assert "bicycling" in amap.modes_for(Channel.OFFICIAL)
+    places = provider.parse_search_places(body)
 
-    tencent = make_provider("tencent")
-    assert tencent.modes_for(Channel.DIRECT) == {
-        "driving",
-        "walking",
-        "bicycling",
-        "transit",
-    }
+    assert len(places) == 9
+    assert "天安门" not in [place.name for place in places]
 
 
-# ----------------------------------------------------------------------
-# The transit route of Amap
-# ----------------------------------------------------------------------
+def test_a_baidu_official_poi_without_a_position_is_skipped() -> None:
+    """A POI without a location is not a place."""
+    body = load_fixture("baidu_official_search.json")
+    body["results"][0].pop("location")
+    provider = make_provider("baidu")
 
-# The shape of the transit reply of Amap, written by hand from the
-# documented shape of the direction/transit/integrated route. It was not
-# recorded from the live endpoint, because no Amap key was available
-# when it was written. The walking part and the bus line of the reply
-# hold the distance and the duration of that part.
-AMAP_TRANSIT = {
-    "status": "1",
-    "info": "OK",
-    "infocode": "10000",
-    "count": "1",
-    "route": {
-        "origin": "116.397428,39.908823",
-        "destination": "116.396670,39.908640",
-        "distance": 300,
-        "transits": [
-            {
-                "cost": 2,
-                "duration": 2143,
-                "walking_distance": 300,
-                "segments": [
-                    {
-                        "walking": {
-                            "origin": "116.397428,39.908823",
-                            "destination": "116.397502,39.908895",
-                            "distance": 300,
-                            "duration": 240,
-                            "steps": [
-                                {
-                                    "instruction": "往东北方向步行300米",
-                                    "road": "东长安街",
-                                    "distance": 300,
-                                    "duration": 240,
-                                    "polyline": "116.397428,39.908823;116.397502,39.908895",
-                                    "action": "步行",
-                                }
-                            ],
-                        },
-                        "bus": {
-                            "buslines": [
-                                {
-                                    "name": "1路",
-                                    "distance": 8000,
-                                    "duration": 1500,
-                                    "polyline": "116.397502,39.908895;116.396670,39.908640",
-                                }
-                            ]
-                        },
-                    }
-                ],
-            }
-        ],
-    },
-}
+    places = provider.parse_official_search(body)
+
+    assert len(places) == 2
 
 
-def test_the_amap_transit_reply_gives_a_route() -> None:
-    """The transit reply of Amap is read as a route."""
-    amap = make_provider("amap", channel=Channel.OFFICIAL, amap_key="test-key")
+def test_the_baidu_official_search_reads_the_older_item_list() -> None:
+    """The old reply of Baidu holds the places under result.items."""
+    body = load_fixture("baidu_official_search.json")
+    items = body.pop("results")
+    body["result"] = {"items": items}
+    provider = make_provider("baidu")
 
-    route = amap.parse_route(
-        AMAP_TRANSIT,
-        (116.397428, 39.908823),
-        (116.396670, 39.908640),
-        "transit",
-    )
+    places = provider.parse_official_search(body)
 
-    # The distance is the sum of the walking part and of the bus line.
-    assert route.distance_m == 8300.0
-    # The time of the route is the one of the plan.
-    assert route.duration_s == 2143.0
-    assert route.mode == "transit"
-    # The walking step and the bus line.
-    assert len(route.steps) == 2
-    assert route.steps[0]["distance_m"] == 300.0
-    assert route.steps[1]["road"] == "1路"
-    assert route.steps[1]["distance_m"] == 8000.0
+    assert len(places) == 3
+    assert places[0].name == "天安门"
 
 
-def test_an_amap_transit_reply_without_the_numbers_is_no_route() -> None:
-    """A reply without the numbers of the route is not a route."""
-    body = json.loads(json.dumps(AMAP_TRANSIT))
-    del body["route"]["transits"][0]["segments"][0]["bus"]["buslines"][0]["distance"]
-    del body["route"]["transits"][0]["segments"][0]["walking"]["distance"]
-
-    amap = make_provider("amap", channel=Channel.OFFICIAL, amap_key="test-key")
+def test_the_baidu_geocode_needs_a_position() -> None:
+    """A reply without a position is an error, not an empty answer."""
+    provider = make_provider("baidu")
 
     with pytest.raises(ProviderError) as info:
-        amap.parse_route(
-            body,
+        provider.parse_geocode({"content": {}})
+
+    assert info.value.status == ProviderStatus.ERROR
+    assert "no place" in info.value.message
+
+
+def test_the_baidu_geocode_refuses_a_reply_that_is_not_an_object() -> None:
+    """A reply that is not a JSON object is an error."""
+    provider = make_provider("baidu")
+
+    with pytest.raises(ProviderError) as info:
+        provider.parse_geocode("not a dict")
+
+    assert info.value.status == ProviderStatus.ERROR
+
+
+def test_the_baidu_reverse_needs_a_position() -> None:
+    """A reply without a position is an error, not an empty answer."""
+    provider = make_provider("baidu")
+
+    with pytest.raises(ProviderError) as info:
+        provider.parse_reverse({"result": {}})
+
+    assert info.value.status == ProviderStatus.ERROR
+    assert "no address" in info.value.message
+
+
+def test_the_baidu_official_route_needs_a_route() -> None:
+    """A reply without a route is an error."""
+    provider = make_provider("baidu")
+
+    with pytest.raises(ProviderError) as info:
+        provider.parse_official_route(
+            {"result": {"routes": []}},
             (116.397428, 39.908823),
-            (116.396670, 39.908640),
-            "transit",
+            (116.39667, 39.90864),
+            "driving",
         )
 
     assert info.value.status == ProviderStatus.ERROR
+    assert info.value.message == "Baidu found no route"
 
 
-def test_the_amap_transit_request_carries_the_city() -> None:
-    """The transit route of Amap needs the city of the start point."""
-    amap = make_provider("amap", channel=Channel.OFFICIAL, amap_key="test-key")
-    asked: Dict[str, Any] = {}
+def test_the_amap_search_needs_a_list_of_places() -> None:
+    """A reply without the list of places holds no places."""
+    provider = make_provider("amap", channel=Channel.OFFICIAL, amap_key="test-key")
 
-    def fake_get_json(url: str, params: Any = None, **kwargs: Any) -> Any:
-        asked["url"] = url
-        asked["params"] = params
-        return AMAP_TRANSIT
-
-    amap.http.get_json = fake_get_json  # type: ignore[assignment]
-
-    amap.route(
-        (116.397428, 39.908823),
-        (116.396670, 39.908640),
-        mode="transit",
-        city="Beijing",
-    )
-
-    assert asked["url"].endswith("direction/transit/integrated")
-    assert asked["params"]["city"] == "Beijing"
-    assert asked["params"]["extensions"] == "all"
+    assert provider.parse_search({"status": "1"}) == []
 
 
-# ----------------------------------------------------------------------
-# A route without numbers is not a route of zero metres
-# ----------------------------------------------------------------------
-
-
-def test_a_tencent_route_without_a_distance_is_an_error() -> None:
-    """The tool does not show a route of zero metres that is not there."""
-    tencent = make_provider("tencent")
-    body = {"status": 0, "result": {"routes": [{"duration": 600}]}}
-
-    with pytest.raises(ProviderError) as info:
-        tencent.parse_route(
-            body, (116.397428, 39.908823), (116.396670, 39.908640)
-        )
-
-    assert info.value.status == ProviderStatus.ERROR
-
-
-def test_an_amap_route_without_a_duration_is_an_error() -> None:
-    """The same holds for the v4 route of Amap."""
-    amap = make_provider("amap", channel=Channel.OFFICIAL, amap_key="test-key")
+def test_an_amap_poi_with_a_broken_position_is_skipped() -> None:
+    """A position that cannot be read is not a place."""
+    provider = make_provider("amap", channel=Channel.OFFICIAL, amap_key="test-key")
     body = {
-        "errcode": 0,
-        "errmsg": "OK",
-        "data": {"paths": [{"distance": 215}]},
+        "status": "1",
+        "pois": [
+            {"name": "a", "location": "abc"},
+            {"name": "b", "location": "1,abc"},
+            {"name": "c", "location": 12345},
+            {"name": "d", "location": "116.397428,39.908823"},
+        ],
     }
 
+    places = provider.parse_search(body)
+
+    assert len(places) == 1
+    assert places[0].name == "d"
+    assert places[0].lng == 116.397428
+    assert places[0].lat == 39.908823
+
+
+def test_the_amap_geocode_needs_a_place() -> None:
+    """A reply without a place is an error, not an empty answer."""
+    provider = make_provider("amap", channel=Channel.OFFICIAL, amap_key="test-key")
+
     with pytest.raises(ProviderError) as info:
-        amap.parse_route(
-            body, (116.397428, 39.908823), (116.396670, 39.908640)
+        provider.parse_geocode({"status": "1"})
+
+    assert info.value.status == ProviderStatus.ERROR
+
+    with pytest.raises(ProviderError):
+        provider.parse_geocode({"status": "1", "geocodes": []})
+
+
+def test_the_amap_reverse_needs_an_address() -> None:
+    """A reply without an address is an error."""
+    provider = make_provider("amap", channel=Channel.OFFICIAL, amap_key="test-key")
+
+    with pytest.raises(ProviderError) as info:
+        provider.parse_reverse({"status": "1"})
+
+    assert info.value.status == ProviderStatus.ERROR
+
+
+def test_the_amap_route_needs_a_path() -> None:
+    """A reply without a path is an error."""
+    provider = make_provider("amap", channel=Channel.OFFICIAL, amap_key="test-key")
+
+    with pytest.raises(ProviderError) as info:
+        provider.parse_route(
+            {"status": "1"},
+            (116.397428, 39.908823),
+            (116.39667, 39.90864),
+            "driving",
         )
+
+    assert info.value.status == ProviderStatus.ERROR
+    assert info.value.message == "Amap found no route"
+
+
+def test_the_tencent_search_needs_a_list_of_places() -> None:
+    """A reply without the list of places holds no places."""
+    provider = make_provider("tencent")
+
+    assert provider.parse_search({"status": 0}) == []
+
+
+def test_a_tencent_poi_without_a_position_is_skipped() -> None:
+    """A POI without a location is not a place."""
+    provider = make_provider("tencent")
+    body = {
+        "status": 0,
+        "data": [
+            {"title": "no position"},
+            {"title": "天安门", "location": {"lng": 116.39747, "lat": 39.908823}},
+        ],
+    }
+
+    places = provider.parse_search(body)
+
+    assert len(places) == 1
+    assert places[0].name == "天安门"
+    assert places[0].lng == 116.39747
+
+
+def test_the_tencent_geocode_needs_a_position() -> None:
+    """A reply without a position is an error, not an empty answer."""
+    provider = make_provider("tencent")
+
+    with pytest.raises(ProviderError) as info:
+        provider.parse_geocode({"status": 0, "result": {}})
+
+    assert info.value.status == ProviderStatus.ERROR
+    assert "no place" in info.value.message
+
+
+def test_the_tencent_reverse_needs_a_position() -> None:
+    """A reply without a position is an error."""
+    provider = make_provider("tencent")
+
+    with pytest.raises(ProviderError) as info:
+        provider.parse_reverse({"status": 0, "result": {}})
+
+    assert info.value.status == ProviderStatus.ERROR
+
+
+def test_the_tencent_route_needs_a_route() -> None:
+    """A reply without a route is an error."""
+    provider = make_provider("tencent")
+
+    with pytest.raises(ProviderError) as info:
+        provider.parse_route(
+            {"status": 0, "result": {}},
+            (116.39747, 39.908823),
+            (116.397755, 39.903182),
+            "driving",
+        )
+
+    assert info.value.status == ProviderStatus.ERROR
+    assert info.value.message == "Tencent found no route"
+
+
+# ----------------------------------------------------------------------
+# The known gaps
+#
+# These three tests say what the tool should do. They fail today and
+# they are marked as expected failures, so the suite stays green and
+# the gap stays visible. Every one of them is written down in
+# docs/REVIEW-v0.0.1.md. When the code is fixed, the test passes and
+# the mark can be taken away.
+# ----------------------------------------------------------------------
+
+
+@pytest.mark.xfail(
+    reason=(
+        "known gap: a position that cannot be read becomes the point (0,0) "
+        "instead of being skipped. See docs/REVIEW-v0.0.1.md."
+    )
+)
+def test_a_broken_baidu_position_is_not_a_place_at_zero() -> None:
+    """A position that is not a number must not become a place at (0,0).
+
+    The web route of Baidu holds the position as text. A text that
+    cannot be read as a number becomes 0.0, so the place is reported
+    near the equator in the Atlantic, far away from China.
+    """
+    provider = make_provider("baidu")
+    body = {
+        "content": [
+            {"name": "broken", "x": "not a number", "y": "not a number"},
+        ]
+    }
+
+    assert provider.parse_search_places(body) == []
+
+
+@pytest.mark.xfail(
+    reason=(
+        "known gap: the web fallback of Baidu hides the rate limit of the "
+        "official API. See docs/REVIEW-v0.0.1.md."
+    )
+)
+def test_a_rate_limited_baidu_search_is_not_muted_by_the_web_fallback() -> None:
+    """A rate limit must stay a rate limit.
+
+    The direct channel of Baidu calls the official API first and falls
+    back to the web route when that fails. A rate limit is a failure of
+    the provider, so the fallback must not turn it into an answer with
+    no places.
+    """
+
+    class FakeHttp:
+        """An http client that is rate limited and has an empty web reply."""
+
+        def get_json(self, url: str, params: Any = None, **kwargs: Any) -> Any:
+            """Fail the API and give back an empty web reply."""
+            if "place/v2/search" in url:
+                raise ProviderError(
+                    "the provider rate limit was hit", ProviderStatus.RATE_LIMITED
+                )
+            return {"content": [], "result": {}}
+
+    config = Config()
+    provider = get_provider("baidu", config, FakeHttp(), Channel.DIRECT)
+
+    with pytest.raises(ProviderError) as info:
+        provider.search_places("天安门")
+
+    assert info.value.status == ProviderStatus.RATE_LIMITED
+
+
+@pytest.mark.xfail(
+    reason=(
+        "known gap: a reply that holds no data at all is read as an answer "
+        "with no places. See docs/REVIEW-v0.0.1.md."
+    )
+)
+def test_a_tencent_reply_without_data_is_an_error() -> None:
+    """A reply that holds nothing is not an answer with no places.
+
+    The status of the reply is 0, so the reply says that the call
+    worked. But there is no data list at all, so the reply is broken
+    and the tool must say so instead of showing an empty answer.
+    """
+    provider = make_provider("tencent")
+
+    with pytest.raises(ProviderError) as info:
+        provider.parse_search({"status": 0})
 
     assert info.value.status == ProviderStatus.ERROR

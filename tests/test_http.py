@@ -1,5 +1,6 @@
 """Tests for the HTTP layer."""
 
+import threading
 import time
 from typing import Any, Dict, List, Optional
 
@@ -577,3 +578,128 @@ def test_a_body_that_holds_no_map_data_is_never_kept_in_the_cache() -> None:
 
     # The web route of Baidu has no status and holds real data, it is kept.
     assert is_good_body({"content": [{"name": "a place"}], "result": {}}) is True
+
+
+# ----------------------------------------------------------------------
+# The rate limit of every provider
+# ----------------------------------------------------------------------
+
+
+def test_every_provider_has_its_own_limiter() -> None:
+    """The limiter of one provider is not the limiter of another.
+
+    The client is shared by every thread of one run, so the limiter of
+    a provider is also the limiter of that provider in another thread.
+    """
+    client = HttpClient(Config())
+
+    baidu = client.limiter("baidu")
+    amap = client.limiter("amap")
+
+    assert baidu is not amap
+    assert client.limiter("baidu") is baidu
+    assert client.limiter("amap") is amap
+
+
+def test_the_tokens_of_one_provider_do_not_run_out_for_another() -> None:
+    """Every provider has its own bucket, so they do not slow each other."""
+    client = HttpClient(Config(rate_limits={"baidu": 10.0, "amap": 10.0}))
+    baidu = client.limiter("baidu")
+    amap = client.limiter("amap")
+
+    for _ in range(3):
+        baidu.acquire()
+
+    # The bucket of Baidu is empty now, the bucket of Amap is still full.
+    # The tokens are private, so the check reads them directly.
+    assert baidu._tokens < 1.0
+    assert amap._tokens == amap.burst
+
+
+def test_the_default_rate_of_every_provider_is_there() -> None:
+    """The three providers have the rate that the config asks for."""
+    client = HttpClient(Config())
+
+    assert client.limiter("baidu").rate_per_second == 20.0
+    assert client.limiter("amap").rate_per_second == 3.0
+    assert client.limiter("tencent").rate_per_second == 5.0
+
+
+def test_the_rate_of_a_limiter_comes_from_the_config() -> None:
+    """The rate of a provider is the one of the config file."""
+    client = HttpClient(Config(rate_limits={"baidu": 1.5, "amap": 7.0}))
+
+    assert client.limiter("baidu").rate_per_second == 1.5
+    assert client.limiter("amap").rate_per_second == 7.0
+    # A provider that is not in the config gets the default rate.
+    assert client.limiter("tencent").rate_per_second == 5.0
+
+
+def test_the_limiter_is_shared_by_the_threads_of_one_provider() -> None:
+    """Four threads of one provider wait for each other.
+
+    The bucket holds one request, so three of the four threads have to
+    wait for the token of the next one. If every thread had its own
+    bucket, they would all go out at the same time.
+    """
+    client = HttpClient(Config(rate_limits={"amap": 8.0}))
+    limiter = client.limiter("amap")
+
+    def take() -> None:
+        """Take one token of the limiter."""
+        limiter.acquire()
+
+    started = time.monotonic()
+    threads = [threading.Thread(target=take) for _ in range(4)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+    elapsed = time.monotonic() - started
+
+    # Three waits of about 0.125 seconds each.
+    assert elapsed >= 0.30
+
+
+def test_a_request_waits_for_the_limiter_of_its_provider() -> None:
+    """Three calls of one provider take the time of the rate."""
+    client = FakeClient(
+        [FakeResponse(200, {"status": 0}) for _ in range(3)],
+        config=Config(retries=0, rate_limits={"baidu": 10.0}),
+    )
+
+    started = time.monotonic()
+    for _ in range(3):
+        client.get_json("https://example.com/x", provider="baidu")
+    elapsed = time.monotonic() - started
+
+    # Two waits of about 0.1 seconds each.
+    assert elapsed >= 0.15
+
+
+def test_a_retry_takes_a_token_of_the_limiter_again() -> None:
+    """A retry is a new request, so it waits for the rate too."""
+    client = FakeClient(
+        [FakeResponse(429), FakeResponse(200, {"status": 0})],
+        config=Config(retries=1, rate_limits={"baidu": 10.0}),
+    )
+
+    started = time.monotonic()
+    client.get_json("https://example.com/x", provider="baidu")
+    elapsed = time.monotonic() - started
+
+    assert len(client.fake.calls) == 2
+    # The two attempts are two requests, so the second one waited.
+    assert elapsed >= 0.08
+
+
+def test_the_state_of_a_provider_says_how_many_attempts_it_took() -> None:
+    """The number of attempts of the last request is kept."""
+    client = FakeClient(
+        [FakeResponse(429), FakeResponse(200, {"status": 0})],
+        config=Config(retries=1),
+    )
+
+    client.get_json("https://example.com/x", provider="baidu")
+
+    assert client.state_for("baidu")["attempts"] == 2
