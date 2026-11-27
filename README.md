@@ -39,16 +39,17 @@ mapq search 天安门 --city 北京 --limit 3
 ```
 
 ```
-baidu: ok (direct, 379 ms) | amap: not_configured (no AMAP_API_KEY) | tencent: ok (direct, 284 ms)
+baidu: ok (direct, 1051 ms) | amap: not_configured (no AMAP_API_KEY) | tencent: ok (direct, 1015 ms)
 
- provider ┃ name            ┃ address                                  ┃ category              ┃        lng ┃       lat
-━━━━━━━━━━╇━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━╇━━━━━━━━━━━
+ provider │ name            │ address                                  │ category              │        lng │       lat
+──────────┼─────────────────┼──────────────────────────────────────────┼───────────────────────┼────────────┼───────────
  baidu    │ 天安门          │ 北京市东城区长安街                       │ 旅游景点;文物古迹     │  116.39759 │ 39.908776
  baidu    │ 天安门广场      │ 北京市东城区东长安街                     │ 旅游景点;文物古迹     │ 116.397799 │ 39.903307
  baidu    │ 天安门东        │ 地铁1号线八通线                          │ 交通设施;地铁站       │  116.40154 │ 39.907736
  tencent  │ 天安门          │ 北京市东城区东华门街道西长安街           │ 旅游景点:国家级景点   │  116.39747 │ 39.908823
  tencent  │ 天安门广场      │ 北京市东城区东长安街                     │ 旅游景点:风景名胜     │ 116.397827 │  39.90374
- tencent  │ 天安门广场-国旗 │ 北京市东城区东长安街与广场东侧路交叉口西 │ 旅游景点:其它旅游景点 │  116.39757 │  39.90693
+ tencent  │ 天安门广场-国旗 │ 北京市东城区东长安街与广场东侧路交叉口西 │ 旅游景点:其它旅游景点 │  116.39757 │ 39.90693
+          │                 │ 南方向174米左右                          │                       │            │
 ```
 
 The first line is the status of every provider. It says who answered, on which
@@ -61,21 +62,34 @@ mapq compare 天安门 --city 北京 --limit 5
 ```
 
 ```
-baidu: ok (direct, 405 ms) | amap: not_configured (no AMAP_API_KEY) | tencent: ok (direct, 6 ms)
+baidu: ok (direct, 1167 ms) | amap: not_configured (no AMAP_API_KEY) | tencent: ok (direct, 1032 ms)
+
+                                                     Places
+ provider │ name             │ address                                                 │        lng │       lat
+──────────┼──────────────────┼─────────────────────────────────────────────────────────┼────────────┼───────────
+ baidu    │ 天安门           │ 北京市东城区长安街                                      │  116.39759 │ 39.908776
+ baidu    │ 天安门广场       │ 北京市东城区东长安街                                    │ 116.397799 │ 39.903307
+ baidu    │ 天安门东         │ 地铁1号线八通线                                         │  116.40154 │ 39.907736
+ baidu    │ 天安门西         │ 地铁1号线八通线                                         │ 116.391652 │ 39.907463
+ baidu    │ 天安门-城楼      │ 北京市东城区西长安街天安门                              │ 116.397573 │ 39.908744
+ tencent  │ 天安门           │ 北京市东城区东华门街道西长安街                          │  116.39747 │ 39.908823
+ tencent  │ 天安门广场       │ 北京市东城区东长安街                                    │ 116.397827 │  39.90374
+ tencent  │ 天安门广场-国旗  │ 北京市东城区东长安街与广场东侧路交叉口西南方向174米左右 │  116.39757 │ 39.90693
+ tencent  │ 天安门东[地铁站] │ 地铁1号线八通线                                         │ 116.401273 │ 39.907773
+ tencent  │ 天安门城楼       │ 北京市东城区东长安街天安门广场北侧                      │ 116.397513 │ 39.908739
 
                                         Clusters
- id ┃ name            ┃ providers      ┃ members ┃        lng ┃       lat ┃ spread_max_m
-━━━━╇━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━╇━━━━━━━━━╇━━━━━━━━━━━━╇━━━━━━━━━━━╇━━━━━━━━━━━━━━
-  1 │ 天安门          │ baidu, tencent │       3 │ 116.397545 │ 39.908781 │         12.5
+ id │ name            │ providers      │ members │        lng │       lat │ spread_max_m
+────┼─────────────────┼────────────────┼─────────┼────────────┼───────────┼──────────────
+  1 │ 天安门          │ baidu, tencent │       4 │ 116.397537 │  39.90877 │         12.5
   2 │ 天安门广场      │ baidu, tencent │       2 │ 116.397813 │ 39.903523 │         48.2
   3 │ 天安门东        │ baidu, tencent │       2 │ 116.401407 │ 39.907755 │         23.1
   4 │ 天安门西        │ baidu          │       1 │ 116.391652 │ 39.907463 │          0.0
-  5 │ 天安门广场-国旗 │ tencent        │       1 │  116.39757 │  39.90693 │          0.0
-  6 │ 天安门广场-入口 │ tencent        │       1 │ 116.399506 │ 39.900906 │          0.0
+  5 │ 天安门广场-国旗 │ tencent        │       1 │  116.39757 │ 39.90693 │          0.0
 
                     Consensus
- id ┃ name       ┃ providers      ┃ spread_max_m
-━━━━╇━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━
+ id │ name       │ providers      │ spread_max_m
+────┼────────────┼────────────────┼──────────────
   1 │ 天安门     │ baidu, tencent │         12.5
   2 │ 天安门广场 │ baidu, tencent │         48.2
   3 │ 天安门东   │ baidu, tencent │         23.1
@@ -86,6 +100,10 @@ Skipped:
   amap: Amap (Gaode) needs the key AMAP_API_KEY for search
 ```
 
+The first table holds the places that the providers returned. The second one
+groups them, the third one holds the groups that every provider that answered
+agrees on.
+
 ### 3. Change a point from one coordinate system to another
 
 ```bash
@@ -93,8 +111,8 @@ mapq convert --from bd09 --to gcj02 116.403963,39.915119
 ```
 
 ```
- from_system ┃ to_system ┃         lng ┃        lat
-━━━━━━━━━━━━━╇━━━━━━━━━━━╇━━━━━━━━━━━━━╇━━━━━━━━━━━━
+ from_system │ to_system │         lng │        lat
+─────────────┼───────────┼─────────────┼────────────
  bd09        │ gcj02     │ 116.3975904 │ 39.9087759
 ```
 
@@ -169,10 +187,14 @@ timeout = 10
 connect_timeout = 3.1
 retries = 2
 jobs = 8
+cluster_radius = 150.0
+name_ratio = 0.55
+same_place_radius = 25.0
 ```
 
 The connect timeout is the time that the tool waits for the connection,
-the timeout is the time that it waits for the answer.
+the timeout is the time that it waits for the answer. The last three
+settings are the rules of the `compare` command.
 
 The environment always wins over the file.
 
@@ -193,15 +215,26 @@ Search for places.
 mapq search 天安门 --city 北京 --limit 3
 ```
 
-Options: `--city`, `--near lng,lat`, `--radius M`, `--limit N`.
+Options: `--city`, `--near lng,lat`, `--radius M`, `--limit N`,
+`--types WORDS`.
 
 With `--near` the tool also shows the distance from that point. A nearby
 search is not possible on the direct channel of Baidu and of Tencent, so
-those two report `not_supported` and the other providers still answer.
+Baidu reports `not_configured` (its official channel can do it, one key of
+your own opens it) and Tencent reports `not_supported` (no channel of
+Tencent can do it). Amap reports `not_configured`, because it cannot
+search at all without a key of your own. The other providers still answer.
+
+`--types` keeps only the places whose category or whose name holds one of
+the words. The words are separated by commas or by semicolons, and every
+provider uses its own words for a type, so the same words are used for all
+of them. With a filter the exit code is 0 when at least one provider kept a
+place of the wanted types, and 1 when no place of the wanted types was left.
 
 A search without a keyword, a geocode without an address, an empty
-`--city` and an empty `--providers` are usage mistakes. The tool stops
-with the exit code 2 and says what is wrong, before it calls a provider.
+`--city`, an empty `--providers` and a limit below 1 are usage mistakes.
+The tool stops with the exit code 2 and says what is wrong, before it calls
+a provider.
 
 ### `mapq geocode <address>`
 
@@ -212,13 +245,15 @@ mapq geocode 天安门广场 --city 北京
 ```
 
 ```
-baidu: ok (direct, 207 ms) | amap: ok (direct, 193 ms) | tencent: rate_limited (the rate limit was hit)
+baidu: ok (direct, 1133 ms) | amap: ok (direct, 1051 ms) | tencent: rate_limited (the rate limit was hit)
 
- provider ┃ address                ┃        lng ┃        lat ┃ level
-━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━╇━━━━━━━━━━━╇━━━━━━━━━━━━
+ provider │ address                │        lng │        lat │ level
+──────────┼────────────────────────┼────────────┼───────────┼──────────
  baidu    │ -                      │   116.3978 │ 39.903307 │ 旅游景点
  amap     │ 北京市东城区天安门广场 │ 116.397755 │ 39.903182 │ 兴趣点
 ```
+
+Options: `--city`.
 
 ### `mapq reverse <lng,lat>`
 
@@ -229,10 +264,10 @@ mapq reverse 116.3975904,39.9087759
 ```
 
 ```
-baidu: ok (direct, 123 ms) | amap: not_configured (no AMAP_API_KEY) | tencent: ok (direct, 153 ms)
+baidu: ok (direct, 1007 ms) | amap: not_configured (no AMAP_API_KEY) | tencent: ok (direct, 931 ms)
 
- provider ┃ address                            ┃        lng ┃       lat ┃ level
-━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━╇━━━━━━━━━━━━╇━━━━━━━━
+ provider │ address                            │        lng │       lat │ level
+──────────┼────────────────────────────────────┼────────────┼───────────┼────────
  baidu    │ 北京市东城区东华门街道中华路甲10号 │ 116.397591 │ 39.908776 │ 东城区
  tencent  │ 北京市东城区西长安街               │  116.39759 │ 39.908776 │ -
 ```
@@ -250,11 +285,11 @@ mapq route 天安门 116.39667,39.90864 --mode driving
 ```
 
 ```
-baidu: not_supported (the channel cannot do this) | amap: ok (direct, 381 ms) | tencent: rate_limited (Tencent Maps could not find the start point: the provider rate limit was hit for https://apis.map.qq.com/ws/geocoder/v1/)
+baidu: not_configured (no BAIDU_MAP_AK) | amap: ok (direct, 883 ms) | tencent: rate_limited (the rate limit was hit)
 
- provider ┃ mode    ┃ distance_m ┃ distance_km ┃ duration_min
-━━━━━━━━━━╇━━━━━━━━━╇━━━━━━━━━━━━╇━━━━━━━━━━━━╇━━━━━━━━━━━━
- amap     │ driving │     1026.0 │       1.026 │          9.1
+ provider │ mode    │ distance_m │ distance_km │ duration_min
+──────────┼─────────┼────────────┼─────────────┼──────────────
+ amap     │ driving │     1026.0 │       1.026 │          8.8
 
 Steps:
   amap (driving):
@@ -269,10 +304,14 @@ Modes: `driving`, `walking`, `cycling`, `transit`. Every provider has its
 own name for a mode, so `cycling` becomes `bicycling` for Amap and for
 Tencent. A provider that cannot do the mode says so.
 
+Options: `--mode`, `--city`. The transit route of Amap needs the city of
+the start point, so `--city` has to be given for a transit route of Amap.
+
 The route of Baidu needs a key of your own. The routing service is switched
-off on the shared AK, so the direct channel of Baidu reports `not_supported`.
-Baidu has no walking, cycling or transit route at all, so it reports
-`not_supported` for those modes on every channel.
+off on the shared AK, so the direct channel of Baidu reports
+`not_configured`. With a key of your own the Baidu channel does routes, but
+only driving ones: Baidu has no walking, cycling or transit route at all, so
+those modes report `not_supported` on every channel.
 
 ### `mapq matrix --from "a;b" --to "c;d"`
 
@@ -284,12 +323,12 @@ mapq matrix --from "116.397428,39.908823;天安门" --to "116.39667,39.90864;天
 ```
 
 ```
-baidu: ok (direct, 11 ms) | amap: ok (direct, 9 ms) | tencent: ok (direct, 3604 ms)
+baidu: ok (direct, 1580 ms) | amap: ok (direct, 1297 ms) | tencent: rate_limited (the rate limit was hit)
 
   Straight line distance in metres. This is not a road
                        distance.
- from                 ┃ 116.39667,39.90864 ┃ 天安门广场
-━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━
+ from                 │ 116.39667,39.90864 │ 天安门广场
+──────────────────────┼────────────────────┼────────────
  116.397428,39.908823 │               67.8 │      614.2
  天安门               │               79.9 │      608.4
 ```
@@ -304,6 +343,9 @@ own status. When no provider can find a place, the command says so and
 stops with the exit code 1. That is the same exit code as "every provider
 failed": it means that no provider answered with data.
 
+Both lists are required. A list with no point in it is a usage mistake, and
+the tool stops with the exit code 2.
+
 ### `mapq compare <keyword>`
 
 The headline feature. It asks every provider, groups the answers that are
@@ -314,7 +356,14 @@ the same place, and measures the distance between the providers. The
 mapq compare 天安门 --city 北京 --limit 5
 ```
 
-Options: `--city`, `--near lng,lat`, `--radius M`, `--limit N`.
+Options: `--city`, `--near lng,lat`, `--radius M`, `--limit N`,
+`--types WORDS`, `--cluster-radius M`, `--name-ratio F`,
+`--same-place-radius M`.
+
+The last three are the rules of the grouping. The default of
+`--cluster-radius` is 150 metres, the default of `--name-ratio` is 0.55 and
+the default of `--same-place-radius` is 25 metres. The option wins over the
+config file, and the config file wins over the built-in default.
 
 ### `mapq convert --from <system> --to <system> <lng,lat>`
 
@@ -325,7 +374,8 @@ so it always works and it never needs a network.
 mapq convert --from bd09 --to gcj02 116.403963,39.915119
 ```
 
-Systems: `wgs84`, `gcj02`, `bd09`.
+Systems: `wgs84`, `gcj02`, `bd09`. Both `--from` and `--to` are
+required, and a system that is not one of the three is a usage mistake.
 
 ### `mapq district <keyword>`
 
@@ -361,17 +411,48 @@ mapq providers
 
 ```
                                                Providers
- provider ┃ name         ┃ channel ┃ key     ┃ search ┃ geocode ┃ reverse ┃ route ┃ district ┃ weather
-━━━━━━━━━━╇━━━━━━━━━━━━━━╇━━━━━━━━━╇━━━━━━━━━╇━━━━━━━━╇━━━━━━━━━╇━━━━━━━━━╇━━━━━━━╇━━━━━━━━━━╇━━━━━━━━━
+ provider │ name         │ channel │ key     │ search │ geocode │ reverse │ route │ district │ weather
+──────────┼──────────────┼─────────┼─────────┼────────┼─────────┼─────────┼───────┼──────────┼─────────
  baidu    │ Baidu Maps   │ direct  │ not set │ yes    │ yes     │ yes     │ no    │ no       │ no
  amap     │ Amap (Gaode) │ direct  │ not set │ no     │ yes     │ no      │ yes   │ no       │ no
  tencent  │ Tencent Maps │ direct  │ not set │ yes    │ yes     │ yes     │ yes   │ yes      │ no
+
+                                         Route modes and limits
+ provider │ channel │ modes                                │ limits
+──────────┼─────────┼──────────────────────────────────────┼────────────────────────────────────────────
+ baidu    │ direct  │ -                                    │ a nearby search needs the official channel
+ amap     │ direct  │ driving                              │ -
+ tencent  │ direct  │ bicycling, driving, transit, walking │ a nearby search is not available
+
+A key of your own opens:
+  baidu: the official channel opens route
+  amap: the official channel opens district, reverse, search, weather
 ```
+
+The first table holds the features of the channel that will be used. The
+second one holds the route modes and the limits of that channel. The lines
+under them say what a key of your own would open.
+
+Options: `--channel direct|official`. It shows the other channel without
+using it, so you can see what a key of your own would change.
 
 ### `mapq config show|set|init`
 
 Look at the settings and manage the keys. See
 [the channels](#the-direct-channel).
+
+```bash
+mapq config show                     # the settings and the masked keys
+mapq config set amap key "your key"  # write one key to the config file
+mapq config set amap key             # the value is asked for, not shown
+mapq config init                     # create the config file
+```
+
+`config set` takes the name of the provider, the name of the key and the
+value. The key names are `ak` and `sk` for Baidu, `key` and `secret` for
+Amap, `key` and `sk` for Tencent. When the value is left out, the tool asks
+for it and does not show what you type. A key name that the provider does
+not have is a usage mistake, and the tool stops with the exit code 2.
 
 ---
 
@@ -445,8 +526,11 @@ answer came from and the quota headers, when there are any:
 
 ```
 baidu: channel direct, 142 ms, 1 attempt(s), from the network
-tencent: channel direct, 90 ms, 3 attempt(s), from the network, quota current_qps=3, limit_qps=500
+tencent: channel direct, 931 ms, 1 attempt(s), from the network, quota current_pv=368261, current_qps=1, limit_pv=20000000000398, limit_qps=150
 ```
+
+A provider that was never called has no attempts and the line says that no
+request was made.
 
 ### Exit codes
 
@@ -455,6 +539,7 @@ tencent: channel direct, 90 ms, 3 attempt(s), from the network, quota current_qp
 | 0 | At least one provider answered with data, or the matrix could be computed. |
 | 1 | No provider answered with data: every provider failed, or the matrix could not find the places. |
 | 2 | The command was used in the wrong way, such as a bad point or an empty keyword. |
+| 130 | The command was stopped with Ctrl-C. |
 
 ---
 
@@ -524,8 +609,8 @@ of the places in it, and two numbers:
   This is the usual case.
 
 A cluster is a chain of matches, so the spread of a cluster can be bigger
-than the distance that was used to match. The `spread_max_m` column is the
-number to look at.
+than the distance that was used to match. The `spread_max_m` column is
+the number to look at.
 
 ### What the output means
 
@@ -581,6 +666,10 @@ A few more honest notes:
 - A provider that cannot do a feature is reported as `not_supported`.
   A provider that could do it but has no key is reported as
   `not_configured`.
+- A nearby search is not possible on the direct channel of Baidu and of
+  Tencent. Baidu reports `not_configured`, because its official channel
+  can do it. Tencent reports `not_supported`, because no channel of
+  Tencent can do it.
 - The shared keys of the direct channel belong to the live websites of the
   providers. They are busy. If a command answers `rate_limited`, wait a
   moment and try again, or set a key of your own.
@@ -637,6 +726,7 @@ mapquery/
 │   ├── cache.py                    # the small disk cache
 │   ├── engine.py                   # the thread pool and the fan out
 │   ├── compare.py                  # the clusters, the consensus and the spread
+│   ├── filters.py                  # the filter on the types of the places
 │   ├── render.py                   # the table, the JSON and the CSV
 │   └── providers/
 │       ├── __init__.py             # the registry

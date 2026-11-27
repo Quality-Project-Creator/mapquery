@@ -7,6 +7,9 @@ documented shape.
 
 Date of trace: 2026-11-22. All three hosts answered from a plain sandbox with no login.
 
+Re-test: 2026-11-27. The same routes were called once more, one endpoint at a time, with the
+sleep of the script kept. The results are in [the re-test section](#re-test-on-2026-11-27).
+
 ---
 
 ## Why trace at all
@@ -19,6 +22,51 @@ This tool therefore has two channels per provider:
 
 - **direct** — the traced front-end route. Default. No key needed.
 - **official** — the documented WebService API. Used when the user sets their own key.
+
+---
+
+## Re-test on 2026-11-27
+
+Every route below was called once more on 2026-11-27, one endpoint at a time, with the sleep of
+`tools/trace_sources.py` kept. The script was run from a copy outside the repository, so the
+recorded fixtures in `tests/fixtures/` were not overwritten; their hashes are the same before and
+after the run. The copy only added the printing of the response headers, so that the quota of
+every reply is on the record.
+
+### What the tool itself sees
+
+| Provider | Command | Status | Quota headers |
+|---|---|---|---|
+| Baidu | `mapq search 天安门 --city 北京 --limit 2 --providers baidu` | `ok (direct, 1097 ms)`, 1 attempt | none |
+| Amap | `mapq geocode 天安门广场 --city 北京 --providers amap` | `ok (direct, 709 ms)`, 1 attempt | none |
+| Amap | `mapq search 天安门 --city 北京 --limit 2 --providers amap` | `not_configured (no AMAP_API_KEY)`, 0 attempts, no request was made | none |
+| Tencent | `mapq search 天安门 --city 北京 --limit 2 --providers tencent` | `ok (direct, 1005 ms)`, 1 attempt | `current_qps=1; limit_qps=150; current_pv=368261; limit_pv=20000000000398` |
+
+### The short version
+
+| Provider | Endpoint | HTTP | Quota | Result |
+|---|---|---|---|---|
+| Baidu | `qt=s` (search) | 200 | none | data, about 280 KB |
+| Baidu | `qt=gc` (geocode) | 200 | none | data |
+| Baidu | `qt=rgc` (reverse) | 200 | none | data |
+| Baidu | `map.baidu.com/su` (suggest) | 200 | none | data |
+| Baidu | `place/v2/search` (front-end AK) | 200 | none | `status 0`, `total 106` |
+| Baidu | `geocoding/v3` (front-end AK) | 200 | none | `status 0` |
+| Baidu | `reverse_geocoding/v3` (front-end AK) | 200 | none | `status 0` |
+| Amap | `geocode/geo` | 200 | none | `status 1`, `infocode 10000` |
+| Amap | `direction/driving` | 200 | none | `status 1`, `infocode 10000` |
+| Amap | `place/text` | **403** | none | HTML error page, not JSON |
+| Amap | `geocode/regeo` | 200 | none | HTML risk-control page, not map data |
+| Tencent | `place/v1/suggestion` | 200 | `current_qps=1; limit_qps=150` | `status 0` |
+| Tencent | `place/v1/search` | 200 | `current_qps=1; limit_qps=300` | `status 0`, `count 0`, `data []` |
+| Tencent | `geocoder/v1` (address) | 200 | `current_qps=1; limit_qps=0` | **`status 120`, rate limited** |
+| Tencent | `geocoder/v1` (reverse) | 200 | `current_qps=1; limit_qps=500` | `status 0` |
+| Tencent | `direction/v1/driving` | 200 | `current_qps=1; limit_qps=0` | **`status 120`, rate limited** |
+
+Nothing changed since the first trace on 2026-11-22. Amap still answers 403 on the POI routes,
+the reverse geocode of Amap still answers with a risk-control page, the search of Tencent still
+comes back empty for this key, and the geocode and the driving route of Tencent are still rate
+limited under load.
 
 ---
 
@@ -90,6 +138,28 @@ independent routes to the same number.
 - The old `v1` WebService endpoints are retired. Do not use them.
 - Fixture files: `baidu_search.json`, `baidu_geocode.json`, `baidu_reverse.json`,
   `baidu_suggest.json`.
+
+### Re-test on 2026-11-27
+
+The web route, with no credential at all:
+
+| Endpoint | HTTP | Bytes | What came back |
+|---|---|---|---|
+| `?qt=s&wd=天安门&c=1&pn=0&rn=10&ie=utf-8&oue=1&from=webmap` | 200 | 281589 | `{"place_info":{…}}`, the big map payload. Only `content` holds the POI list. |
+| `?qt=gc&wd=天安门广场&c=1&ie=utf-8&oue=1&from=webmap` | 200 | 714 | `{"result":{"type":35,"qid":"0050416895","qt":"gc","wd":"天安门广场","c":"1","error":0},"content":{…}}` |
+| `?qt=rgc&location=39.915119,116.403963&c=1&ie=utf-8&oue=1&from=webmap` | 200 | 1249 | `{"current_city":{…},…}` |
+| `https://map.baidu.com/su?wd=天安门&cid=1&type=0&pc_ver=2` | 200 | 807 | `{"q":"天安门","p":false,"t":0,"s":[…]}`, the pipe separated list |
+
+The official API with the front-end AK:
+
+| Endpoint | HTTP | Bytes | What came back |
+|---|---|---|---|
+| `place/v2/search` | 200 | 3914 | `{"status":0,"message":"ok","total":106,…}`, the first row is 天安门 at `39.915119, 116.403963` |
+| `geocoding/v3` | 200 | 146 | `{"status":0,"result":{"location":{"lng":116.4041774131041,…}}}` |
+| `reverse_geocoding/v3` | 200 | 851 | `{"status":0,"result":{"location":{"lng":116.40396299999995,…}}}` |
+
+No Baidu reply carries a quota header, so the verbose mode of the tool shows no quota for Baidu.
+The `total 106` of the search and the position of 天安门 are the same as on 2026-11-22.
 
 ---
 
@@ -183,6 +253,27 @@ The quota codes of the v4 API are the same family as the v3 infocodes: `10003`, 
 shape**, not recorded from the live endpoint, because the trace had no Amap key of its own. Every
 other fixture in this folder came from a live call.
 
+### Re-test on 2026-11-27
+
+| Endpoint | HTTP | Bytes | What came back |
+|---|---|---|---|
+| `geocode/geo?address=天安门广场&city=北京&{common}` | 200 | 359 | `{"status":"1","info":"OK","infocode":"10000","count":"1","geocodes":[{"formatted_address":"北京市东城区天安门广场","adcode":"110101","location":"116.397755,39.903182","level":"兴趣点"}]}` |
+| `direction/driving?origin=116.397428,39.908823&destination=116.39667,39.90864&{common}` | 200 | 6058 | `{"status":"1","info":"OK","infocode":"10000","count":"1","route":{…}}` |
+| `place/text?keywords=天安门&city=110000&{common}` | **403** | 839 | an HTML `403 Forbidden` page, not JSON |
+| `geocode/regeo?location=116.397428,39.908823&{common}` | 200 | 5554 | an HTML page, not map data: the risk-control answer |
+
+The two POI answers are the same as on 2026-11-22. The search is still blocked with 403 and the
+reverse geocode is still a risk-control page that carries no `regeocode` section, so the tool
+cannot use it. The geocode and the driving route still answer with data, and the tool reads them
+without a key:
+
+```
+amap: ok (direct, 709 ms)
+amap: channel direct, 709 ms, 1 attempt(s), from the network
+```
+
+No Amap reply carries a quota header, so the verbose mode shows no quota for Amap either.
+
 ---
 
 ## Tencent Location Service
@@ -235,6 +326,32 @@ Reverse geocode returns the address plus the administrative division:
 - Every reply carries quota headers: `current_qps`, `limit_qps`, `current_pv`, `limit_pv`.
 - Fixture files: `tencent_suggest.json`, `tencent_reverse.json`, `tencent_geocode.json`,
   `tencent_search.json`, `tencent_driving.json`.
+
+### Re-test on 2026-11-27
+
+| Endpoint | HTTP | Bytes | X-Limit header | What came back |
+|---|---|---|---|---|
+| `place/v1/suggestion` | 200 | 2315 | `current_qps=1; limit_qps=150; current_pv=364884; limit_pv=20000000000398` | `{"status":0,"message":"query ok","request_id":…}` with the POI rows |
+| `place/v1/search` | 200 | 125 | `current_qps=1; limit_qps=300; current_pv=294940; limit_pv=20000000000198` | `{"status":0,"message":"Success","count":0,"data":[],"region":{"title":"北京市"}}` |
+| `geocoder/v1/?address=天安门广场` | 200 | 89 | `current_qps=1; limit_qps=0; current_pv=1; limit_pv=9999999999999` | **`{"status":120,"message":"此key每秒请求量已达到上限"}`** |
+| `geocoder/v1/?location=39.908823,116.39747&get_poi=1` | 200 | 3878 | `current_qps=1; limit_qps=500; current_pv=368294; limit_pv=20000000000798` | `{"status":0,"message":"Success","request_id":…}` |
+| `direction/v1/driving` | 200 | 89 | `current_qps=1; limit_qps=0; current_pv=1; limit_pv=9999999999999` | **`{"status":120,"message":"此key每秒请求量已达到上限"}`** |
+
+The shape of every reply is the same as on 2026-11-22. The search route still answers `status 0`
+with an empty `data` array for this key, so the search of the tool is built on `suggestion`.
+
+The geocode and the driving route were rate limited again on this day. Both answer HTTP 200 and
+both carry `status 120`, which is a rate limit and not an error. The `limit_qps` header of those
+two replies is 0, while the suggestion route showed `limit_qps=150` and the reverse geocode
+`limit_qps=500` in the same run. The tool reports this as `rate_limited`:
+
+```
+tencent: rate_limited (the rate limit was hit)
+tencent: channel direct, 1005 ms, 1 attempt(s), from the network, quota current_pv=368261, current_qps=1, limit_pv=20000000000398, limit_qps=150
+```
+
+The second line is the search, which did answer. The suggestion route carried the whole quota in
+the one `X-Limit` header, and the tool reads that header and shows it in the verbose mode.
 
 ---
 

@@ -8,6 +8,7 @@ same time, converts the three different answers into one common shape, and shows
 - Interface language: English only (simple English, short sentences)
 - Package: `mapquery` · CLI command: `mapq`
 - Repo root: `/workspace/mapquery` (git repository, tagged `v0.0.1`)
+- State: v0.0.1 is released. What has landed on top of it is in section 13.
 
 ---
 
@@ -177,7 +178,7 @@ never fakes a result.
 
 ```
 mapq search <keyword>              # POI search
-      [--city CITY] [--near lng,lat] [--radius M] [--limit N]
+      [--city CITY] [--near lng,lat] [--radius M] [--limit N] [--types WORDS]
 
 mapq geocode <address>             # address -> coordinates
       [--city CITY]
@@ -185,27 +186,33 @@ mapq geocode <address>             # address -> coordinates
 mapq reverse <lng,lat>             # coordinates -> address
 
 mapq route <from> <to>             # route between two places
-      [--mode driving|walking|cycling|transit]
+      [--mode driving|walking|cycling|transit] [--city CITY]
       # <from>/<to> accept "116.397,39.909" or a text address
 
 mapq matrix --from "a;b" --to "c;d"   # distance matrix between many points
 
 mapq compare <keyword>             # headline feature: query all three, diff the answers
-      [--city CITY] [--near lng,lat] [--radius M]
+      [--city CITY] [--near lng,lat] [--radius M] [--limit N] [--types WORDS]
+      [--cluster-radius M] [--name-ratio F] [--same-place-radius M]
 
 mapq convert --from <sys> --to <sys> <lng,lat>   # wgs84 | gcj02 | bd09
 
 mapq district <keyword>            # administrative districts
 mapq weather <adcode>              # Amap only, clearly labelled
 
-mapq providers                     # config status + capability matrix
+mapq providers [--channel direct|official]   # config status + capability matrix
 mapq config show|set|init          # manage API keys
 ```
 
-**No `--types` filter in v0.0.1.** The plan first listed one. It is not part of this version:
-a types filter needs a search endpoint that takes a type parameter, and the only Amap search
-route is blocked (HTTP 403) on the direct channel, so the filter cannot work for all three
-providers yet. It stays out until every provider has a search route that answers.
+**The types filter is in the code now.** v0.0.1 left it out: a types filter was thought to need
+a search endpoint that takes a type parameter, and the only Amap search route is blocked
+(HTTP 403) on the direct channel, so it could not work for all three providers yet. The filter
+that landed does not need such an endpoint. It works on the words that the provider itself gave,
+so the same words can be used for every provider: a place is kept when one of the wanted words is
+in its category or in its name. It lives in `src/mapquery/filters.py` and is used by `search`
+and by `compare`. The words are separated by commas or by semicolons, and an empty entry is a
+usage mistake. With a filter the exit code is 0 when at least one provider kept a place of the
+wanted types, and 1 when no place of the wanted types was left.
 
 ### 5.2 Global flags
 
@@ -256,6 +263,7 @@ correctly is the actual job.
 │   ├── cache.py                    # small disk cache for repeated queries
 │   ├── engine.py                   # thread pool, fan-out, merge, partial failure
 │   ├── compare.py                  # clustering + consensus + spread
+│   ├── filters.py                  # the filter on the types of the places
 │   ├── render.py                   # table / json / csv output
 │   └── providers/
 │       ├── __init__.py             # provider registry
@@ -266,7 +274,8 @@ correctly is the actual job.
 │       └── direct_keys.py          # the keys of the direct channel
 ├── tools/
 │   ├── trace_sources.py           # re-record the traced replies
-│   └── smoke.py                    # one live call per provider
+│   ├── smoke.py                    # one live call per provider
+│   └── check_readmes.py            # check that the two readmes agree
 └── tests/
     ├── conftest.py
     ├── fixtures/                   # recorded real responses (JSON)
@@ -305,7 +314,8 @@ correctly is the actual job.
 - Results come back in a **fixed provider order**, never completion order, so output is stable.
 - If one provider fails, the others still answer. Each result carries its own status.
 - Exit codes: `0` = at least one provider answered with data, `1` = no provider answered with data
-  (every provider failed, or the matrix could not find the places), `2` = wrong usage.
+  (every provider failed, or the matrix could not find the places), `2` = wrong usage,
+  `130` = the command was stopped with Ctrl-C.
 
 ---
 
@@ -376,6 +386,12 @@ Acceptance bar: `pytest` fully green, the CLI runs from a clean checkout after
 | **Coder** | Writes the code, through the Task tool in small steps. Each step is reviewed before the next one starts. |
 | **Verifier** | Adversarial review at the end: tries to break concurrency, error handling, coordinate maths, key handling and CLI edge cases. |
 
+The team that works on the repository today: **Chief** takes the final call, **代码实现** owns
+`src/**` and the v0.0.2 features, **测试验证** is the independent verifier and only writes a
+report, **文档数据源** owns `README.md`, `README.zh-CN.md` and `docs/**`, and **发布运维** owns
+`.github/**`, the license and the tags. The files stay separated, so nobody edits the work of
+another role.
+
 All data-source work is done by calling the real endpoints and recording the replies as test
 fixtures. Nothing comes from a map web page.
 
@@ -388,3 +404,50 @@ fixtures. Nothing comes from a map web page.
 - An interactive Python REPL — one-shot commands only.
 - Any paid API tier.
 - Publishing to PyPI or a public git remote.
+
+---
+
+## 13. What has changed after v0.0.1
+
+v0.0.1 is the release this plan was written for. The code that is in the tree now already
+carries more than the plan describes. This section keeps the difference on the record, so that
+the plan is not read as a promise about the code.
+
+### The types filter
+
+It is implemented, in `src/mapquery/filters.py`, and both `search` and `compare` take it as
+`--types WORDS`. The reason it was left out in v0.0.1 turned out to be wrong: the filter does
+not need a search endpoint that takes a type parameter, it works on the words that the provider
+gave in its own category and its own name.
+
+### The grouping rules of `compare`
+
+`compare` takes `--cluster-radius`, `--name-ratio` and `--same-place-radius`. The values
+of the plan are still the defaults, 150 metres, 0.55 and 25 metres, but they are now settings
+that can be changed per run and in the config file. The config file of a new run holds them
+next to `timeout`, `connect_timeout`, `retries` and `jobs`.
+
+### The other options that the plan did not name
+
+| Option | Where |
+|---|---|
+| `--types WORDS` | `search`, `compare` |
+| `--cluster-radius M` | `compare` |
+| `--name-ratio F` | `compare` |
+| `--same-place-radius M` | `compare` |
+| `--city CITY` | `route` — the transit route of Amap needs the city of the start point |
+| `--channel direct\|official` | `providers` — shows the other channel without using it |
+
+### The trace was run again on 2026-11-27
+
+Every route was called once more, one endpoint at a time. The results, the HTTP status of every
+reply and the quota headers are in `docs/DATA_SOURCES.md`. Nothing changed: Amap still answers
+403 on the POI routes and a risk-control page on the reverse geocode, the search of Tencent is
+still empty for the shared key, and the geocode and the driving route of Tencent were rate
+limited again.
+
+### The two readmes are checked by a script
+
+`tools/check_readmes.py` checks that both readmes name every command and every key.
+`tests/test_readme.py` checks the promises that the English readme makes. The Chinese readme
+carries the same content and has to be changed together with the English one.

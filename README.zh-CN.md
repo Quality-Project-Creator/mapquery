@@ -42,19 +42,20 @@ mapq search 天安门 --city 北京 --limit 3
 ```
 
 ```
-baidu: ok (direct, 379 ms) | amap: not_configured (no AMAP_API_KEY) | tencent: ok (direct, 284 ms)
+baidu: ok (direct, 1051 ms) | amap: not_configured (no AMAP_API_KEY) | tencent: ok (direct, 1015 ms)
 
- provider ┃ name            ┃ address                                  ┃ category              ┃        lng ┃       lat
-━━━━━━━━━━╇━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━╇━━━━━━━━━━━
+ provider │ name            │ address                                  │ category              │        lng │       lat
+──────────┼─────────────────┼──────────────────────────────────────────┼───────────────────────┼────────────┼───────────
  baidu    │ 天安门          │ 北京市东城区长安街                       │ 旅游景点;文物古迹     │  116.39759 │ 39.908776
  baidu    │ 天安门广场      │ 北京市东城区东长安街                     │ 旅游景点;文物古迹     │ 116.397799 │ 39.903307
  baidu    │ 天安门东        │ 地铁1号线八通线                          │ 交通设施;地铁站       │  116.40154 │ 39.907736
  tencent  │ 天安门          │ 北京市东城区东华门街道西长安街           │ 旅游景点:国家级景点   │  116.39747 │ 39.908823
  tencent  │ 天安门广场      │ 北京市东城区东长安街                     │ 旅游景点:风景名胜     │ 116.397827 │  39.90374
- tencent  │ 天安门广场-国旗 │ 北京市东城区东长安街与广场东侧路交叉口西 │ 旅游景点:其它旅游景点 │  116.39757 │  39.90693
+ tencent  │ 天安门广场-国旗 │ 北京市东城区东长安街与广场东侧路交叉口西 │ 旅游景点:其它旅游景点 │  116.39757 │ 39.90693
+          │                 │ 南方向174米左右                          │                       │            │
 ```
 
-第一行是每个服务商的态。它说明谁答了、走的是哪条通道、用了多久。
+第一行是每个服务商的状态。它说明谁答了、走的是哪条通道、用了多久。
 
 ### 2. 比较各家答案
 
@@ -63,21 +64,34 @@ mapq compare 天安门 --city 北京 --limit 5
 ```
 
 ```
-baidu: ok (direct, 405 ms) | amap: not_configured (no AMAP_API_KEY) | tencent: ok (direct, 6 ms)
+baidu: ok (direct, 1167 ms) | amap: not_configured (no AMAP_API_KEY) | tencent: ok (direct, 1032 ms)
+
+                                                     Places
+ provider │ name             │ address                                                 │        lng │       lat
+──────────┼──────────────────┼─────────────────────────────────────────────────────────┼────────────┼───────────
+ baidu    │ 天安门           │ 北京市东城区长安街                                      │  116.39759 │ 39.908776
+ baidu    │ 天安门广场       │ 北京市东城区东长安街                                    │ 116.397799 │ 39.903307
+ baidu    │ 天安门东         │ 地铁1号线八通线                                         │  116.40154 │ 39.907736
+ baidu    │ 天安门西         │ 地铁1号线八通线                                         │ 116.391652 │ 39.907463
+ baidu    │ 天安门-城楼      │ 北京市东城区西长安街天安门                              │ 116.397573 │ 39.908744
+ tencent  │ 天安门           │ 北京市东城区东华门街道西长安街                          │  116.39747 │ 39.908823
+ tencent  │ 天安门广场       │ 北京市东城区东长安街                                    │ 116.397827 │  39.90374
+ tencent  │ 天安门广场-国旗  │ 北京市东城区东长安街与广场东侧路交叉口西南方向174米左右 │  116.39757 │ 39.90693
+ tencent  │ 天安门东[地铁站] │ 地铁1号线八通线                                         │ 116.401273 │ 39.907773
+ tencent  │ 天安门城楼       │ 北京市东城区东长安街天安门广场北侧                      │ 116.397513 │ 39.908739
 
                                         Clusters
- id ┃ name            ┃ providers      ┃ members ┃        lng ┃       lat ┃ spread_max_m
-━━━━╇━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━╇━━━━━━━━━╇━━━━━━━━━━━━╇━━━━━━━━━━━╇━━━━━━━━━━━━━━
-  1 │ 天安门          │ baidu, tencent │       3 │ 116.397545 │ 39.908781 │         12.5
+ id │ name            │ providers      │ members │        lng │       lat │ spread_max_m
+────┼─────────────────┼────────────────┼─────────┼────────────┼───────────┼──────────────
+  1 │ 天安门          │ baidu, tencent │       4 │ 116.397537 │  39.90877 │         12.5
   2 │ 天安门广场      │ baidu, tencent │       2 │ 116.397813 │ 39.903523 │         48.2
   3 │ 天安门东        │ baidu, tencent │       2 │ 116.401407 │ 39.907755 │         23.1
   4 │ 天安门西        │ baidu          │       1 │ 116.391652 │ 39.907463 │          0.0
-  5 │ 天安门广场-国旗 │ tencent        │       1 │  116.39757 │  39.90693 │          0.0
-  6 │ 天安门广场-入口 │ tencent        │       1 │ 116.399506 │ 39.900906 │          0.0
+  5 │ 天安门广场-国旗 │ tencent        │       1 │  116.39757 │ 39.90693 │          0.0
 
                     Consensus
- id ┃ name       ┃ providers      ┃ spread_max_m
-━━━━╇━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━
+ id │ name       │ providers      │ spread_max_m
+────┼────────────┼────────────────┼──────────────
   1 │ 天安门     │ baidu, tencent │         12.5
   2 │ 天安门广场 │ baidu, tencent │         48.2
   3 │ 天安门东   │ baidu, tencent │         23.1
@@ -88,6 +102,9 @@ Skipped:
   amap: Amap (Gaode) needs the key AMAP_API_KEY for search
 ```
 
+第一张表是各家返回的地点，第二张表把它们归组，第三张表是所有答了的
+服务商都认同的分组。
+
 ### 3. 换算坐标
 
 ```bash
@@ -95,8 +112,8 @@ mapq convert --from bd09 --to gcj02 116.403963,39.915119
 ```
 
 ```
- from_system ┃ to_system ┃         lng ┃        lat
-━━━━━━━━━━━━━╇━━━━━━━━━━━╇━━━━━━━━━━━━━╇━━━━━━━━━━━━
+ from_system │ to_system │         lng │        lat
+─────────────┼───────────┼─────────────┼────────────
  bd09        │ gcj02     │ 116.3975904 │ 39.9087759
 ```
 
@@ -160,9 +177,13 @@ timeout = 10
 connect_timeout = 3.1
 retries = 2
 jobs = 8
+cluster_radius = 150.0
+name_ratio = 0.55
+same_place_radius = 25.0
 ```
 
-`connect_timeout` 是等连接的时间，`timeout` 是等回答的时间。
+`connect_timeout` 是等连接的时间，`timeout` 是等回答的时间。最后三项是
+`compare` 命令的归组规则。
 
 环境变量永远优先于配置文件。
 
@@ -180,11 +201,13 @@ jobs = 8
 mapq search 天安门 --city 北京 --limit 3
 ```
 
-可选参数：`--city`、`--near lng,lat`、`--radius M`、`--limit N`。
+可选参数：`--city`、`--near lng,lat`、`--radius M`、`--limit N`、`--types WORDS`。
 
-带上 `--near` 时，工具还会显示到该点的距离。百度和腾讯的直连通道不支持周边检索，所以这两家会报 `not_supported`，其他服务商照常返回。
+带上 `--near` 时，工具还会显示到该点的距离。百度和腾讯的直连通道不支持周边检索，所以百度报 `not_configured`（它的官方通道能做，配上自己的 Key 就能开），腾讯报 `not_supported`（腾讯任何通道都做不了）。高德报 `not_configured`，因为没有自己的 Key 它根本搜不了。其他服务商照常返回。
 
-空关键词、空地址、空 `--city`、空 `--providers` 都是用法错误。工具会在调用任何服务商之前就以退出码 2 停下，并说明哪里不对。
+`--types` 只保留分类或名称里含有所选词的地点。所选词用逗号或分号分隔，各家对类型的叫法不同，所以同一个词对各家通用。带过滤器时，只要有一家留下了符合类型的地点，退出码就是 0；一个都没留下，退出码是 1。
+
+空关键词、空地址、空 `--city`、空 `--providers`、小于 1 的 `--limit` 都是用法错误。工具会在调用任何服务商之前就以退出码 2 停下，并说明哪里不对。
 
 ### `mapq geocode <address>`
 
@@ -195,13 +218,15 @@ mapq geocode 天安门广场 --city 北京
 ```
 
 ```
-baidu: ok (direct, 207 ms) | amap: ok (direct, 193 ms) | tencent: rate_limited (the rate limit was hit)
+baidu: ok (direct, 1133 ms) | amap: ok (direct, 1051 ms) | tencent: rate_limited (the rate limit was hit)
 
- provider ┃ address                ┃        lng ┃        lat ┃ level
-━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━╇━━━━━━━━━━━╇━━━━━━━━━━━━
+ provider │ address                │        lng │        lat │ level
+──────────┼────────────────────────┼────────────┼───────────┼──────────
  baidu    │ -                      │   116.3978 │ 39.903307 │ 旅游景点
  amap     │ 北京市东城区天安门广场 │ 116.397755 │ 39.903182 │ 兴趣点
 ```
+
+可选参数：`--city`。
 
 ### `mapq reverse <lng,lat>`
 
@@ -212,10 +237,10 @@ mapq reverse 116.3975904,39.9087759
 ```
 
 ```
-baidu: ok (direct, 123 ms) | amap: not_configured (no AMAP_API_KEY) | tencent: ok (direct, 153 ms)
+baidu: ok (direct, 1007 ms) | amap: not_configured (no AMAP_API_KEY) | tencent: ok (direct, 931 ms)
 
- provider ┃ address                            ┃        lng ┃       lat ┃ level
-━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━╇━━━━━━━━━━━━╇━━━━━━━━
+ provider │ address                            │        lng │       lat │ level
+──────────┼────────────────────────────────────┼────────────┼───────────┼────────
  baidu    │ 北京市东城区东华门街道中华路甲10号 │ 116.397591 │ 39.908776 │ 东城区
  tencent  │ 北京市东城区西长安街               │  116.39759 │ 39.908776 │ -
 ```
@@ -231,11 +256,11 @@ mapq route 天安门 116.39667,39.90864 --mode driving
 ```
 
 ```
-baidu: not_supported (the channel cannot do this) | amap: ok (direct, 381 ms) | tencent: rate_limited (Tencent Maps could not find the start point: the provider rate limit was hit for https://apis.map.qq.com/ws/geocoder/v1/)
+baidu: not_configured (no BAIDU_MAP_AK) | amap: ok (direct, 883 ms) | tencent: rate_limited (the rate limit was hit)
 
- provider ┃ mode    ┃ distance_m ┃ distance_km ┃ duration_min
-━━━━━━━━━━╇━━━━━━━━━╇━━━━━━━━━━━━╇━━━━━━━━━━━━╇━━━━━━━━━━━━
- amap     │ driving │     1026.0 │       1.026 │          9.1
+ provider │ mode    │ distance_m │ distance_km │ duration_min
+──────────┼─────────┼────────────┼─────────────┼──────────────
+ amap     │ driving │     1026.0 │       1.026 │          8.8
 
 Steps:
   amap (driving):
@@ -248,7 +273,9 @@ Steps:
 
 模式有：`driving`、`walking`、`cycling`、`transit`。每家对同一个模式叫法不同，所以 `cycling` 在高德和腾讯那边叫 `bicycling`。做不到某个模式的服务商会直说。
 
-百度的路线需要你自己的 Key。共享的那个 AK 上路线服务是关掉的，所以百度的直连通道报 `not_supported`。百度本身没有步行、骑行、公交路线，所以这些模式在任何通道上都报 `not_supported`。
+可选参数：`--mode`、`--city`。高德的公交路线需要起点的城市，所以走高德公交路线时必须给 `--city`。
+
+百度的路线需要你自己的 Key。共享的那个 AK 上路线服务是关掉的，所以百度的直连通道报 `not_configured`。配了自己的 Key 之后百度通道能出路线，但只有驾车路线：百度本身没有步行、骑行、公交路线，所以这些模式在任何通道上都报 `not_supported`。
 
 ### `mapq matrix --from "a;b" --to "c;d"`
 
@@ -259,12 +286,12 @@ mapq matrix --from "116.397428,39.908823;天安门" --to "116.39667,39.90864;天
 ```
 
 ```
-baidu: ok (direct, 11 ms) | amap: ok (direct, 9 ms) | tencent: ok (direct, 3604 ms)
+baidu: ok (direct, 1580 ms) | amap: ok (direct, 1297 ms) | tencent: rate_limited (the rate limit was hit)
 
   Straight line distance in metres. This is not a road
                        distance.
- from                 ┃ 116.39667,39.90864 ┃ 天安门广场
-━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━
+ from                 │ 116.39667,39.90864 │ 天安门广场
+──────────────────────┼────────────────────┼────────────
  116.397428,39.908823 │               67.8 │      614.2
  天安门               │               79.9 │      608.4
 ```
@@ -272,6 +299,8 @@ baidu: ok (direct, 11 ms) | amap: ok (direct, 9 ms) | tencent: ok (direct, 3604 
 这是直线距离，不是道路距离，也不是步行距离。
 
 矩阵里的地址会用真正答得出来的那个服务商做地理编码。各家依次尝试，所以某个被限流的服务商不会拖累其他家。状态行会列出所有被问到的服务商和各自的状态。当没有一家能解析出地点时，命令会说明并以退出码 1 结束。这和"所有服务商都失败"是同一个退出码，含义是：没有任何一家给出了数据。
+
+两个列表都是必填的。列表里一个点都没有属于用法错误，工具会以退出码 2 停下。
 
 ### `mapq compare <keyword>`
 
@@ -281,7 +310,9 @@ baidu: ok (direct, 11 ms) | amap: ok (direct, 9 ms) | tencent: ok (direct, 3604 
 mapq compare 天安门 --city 北京 --limit 5
 ```
 
-可选参数：`--city`、`--near lng,lat`、`--radius M`、`--limit N`。
+可选参数：`--city`、`--near lng,lat`、`--radius M`、`--limit N`、`--types WORDS`、`--cluster-radius M`、`--name-ratio F`、`--same-place-radius M`。
+
+后三个是归组规则。`--cluster-radius` 默认 150 米，`--name-ratio` 默认 0.55，`--same-place-radius` 默认 25 米。命令行参数优先于配置文件，配置文件优先于内置默认值。
 
 ### `mapq convert --from <system> --to <system> <lng,lat>`
 
@@ -291,7 +322,7 @@ mapq compare 天安门 --city 北京 --limit 5
 mapq convert --from bd09 --to gcj02 116.403963,39.915119
 ```
 
-坐标系：`wgs84`、`gcj02`、`bd09`。
+坐标系：`wgs84`、`gcj02`、`bd09`。`--from` 和 `--to` 都是必填的，不在这三个里的坐标系属于用法错误。
 
 ### `mapq district <keyword>`
 
@@ -323,16 +354,45 @@ mapq providers
 
 ```
                                                Providers
- provider ┃ name         ┃ channel ┃ key     ┃ search ┃ geocode ┃ reverse ┃ route ┃ district ┃ weather
-━━━━━━━━━━╇━━━━━━━━━━━━━━╇━━━━━━━━━╇━━━━━━━━━╇━━━━━━━━╇━━━━━━━━━╇━━━━━━━━━╇━━━━━━━╇━━━━━━━━━━╇━━━━━━━━━
+ provider │ name         │ channel │ key     │ search │ geocode │ reverse │ route │ district │ weather
+──────────┼──────────────┼─────────┼─────────┼────────┼─────────┼─────────┼───────┼──────────┼─────────
  baidu    │ Baidu Maps   │ direct  │ not set │ yes    │ yes     │ yes     │ no    │ no       │ no
  amap     │ Amap (Gaode) │ direct  │ not set │ no     │ yes     │ no      │ yes   │ no       │ no
  tencent  │ Tencent Maps │ direct  │ not set │ yes    │ yes     │ yes     │ yes   │ yes      │ no
+
+                                         Route modes and limits
+ provider │ channel │ modes                                │ limits
+──────────┼─────────┼──────────────────────────────────────┼────────────────────────────────────────────
+ baidu    │ direct  │ -                                    │ a nearby search needs the official channel
+ amap     │ direct  │ driving                              │ -
+ tencent  │ direct  │ bicycling, driving, transit, walking │ a nearby search is not available
+
+A key of your own opens:
+  baidu: the official channel opens route
+  amap: the official channel opens district, reverse, search, weather
 ```
+
+第一张表是将会使用的通道上各家的能力，第二张表是该通道的路线模式和限制，
+下面的几行说明配上自己的 Key 之后会多出哪些能力。
+
+可选参数：`--channel direct|official`。它只展示另一条通道而不使用它，方便你看到
+自己的 Key 会带来什么变化。
 
 ### `mapq config show|set|init`
 
 查看设置、管理 Key。参见[通道](#直连通道direct)。
+
+```bash
+mapq config show                     # 显示设置，Key 会被遮蔽
+mapq config set amap key "your key"  # 把一个 Key 写进配置文件
+mapq config set amap key             # 值由工具询问，输入不回显
+mapq config init                     # 创建配置文件
+```
+
+`config set` 接受服务商名、Key 名和值三部分。Key 名对百度是 `ak` 和 `sk`，
+对高德是 `key` 和 `secret`，对腾讯是 `key` 和 `sk`。不写值的时候，工具会
+询问你输入的内容，而且不回显。写了服务商没有的 Key 名属于用法错误，工具会以
+退出码 2 停下。
 
 ---
 
@@ -394,8 +454,10 @@ verbose 模式会在状态行下面为每个服务商多打一行，包含通道
 
 ```
 baidu: channel direct, 142 ms, 1 attempt(s), from the network
-tencent: channel direct, 90 ms, 3 attempt(s), from the network, quota current_qps=3, limit_qps=500
+tencent: channel direct, 931 ms, 1 attempt(s), from the network, quota current_pv=368261, current_qps=1, limit_pv=20000000000398, limit_qps=150
 ```
+
+根本没被调用的服务商尝试次数是 0，这一行会写明没有发出任何请求。
 
 ### 退出码
 
@@ -404,6 +466,7 @@ tencent: channel direct, 90 ms, 3 attempt(s), from the network, quota current_qp
 | 0 | 至少一家服务商给出了数据，或者矩阵算出来了。 |
 | 1 | 没有任何一家给出数据：要么全都失败，要么矩阵解析不出地点。 |
 | 2 | 命令用错了，比如坐标不合法或关键词为空。 |
+| 130 | 命令被 Ctrl-C 中断。 |
 
 ---
 
@@ -491,6 +554,7 @@ BD-09 是在 GCJ-02 之上再叠一层偏移。两者加起来能把一个点挪
 
 - 被限流的服务商报的是 `rate_limited`，这和"没有结果"不是一回事。工具绝不会把限流变成空答案。
 - 做不到某个功能的服务商报 `not_supported`；做得到但没配 Key 的报 `not_configured`。
+- 百度的直连通道和腾讯都不支持周边检索。百度报 `not_configured`，因为它的官方通道能做这件事；腾讯报 `not_supported`，因为腾讯任何通道都做不了。
 - 直连通道用的共享 Key 属于服务商的线上网站，它们很忙。如果命令返回 `rate_limited`，等一会儿再试，或者配一个自己的 Key。
 - 工具只调用服务商的数据接口。它从不打开浏览器，也从不解析网页。
 - 服务商返回的提示信息不会出现在界面上，因为那些信息可能是中文。工具用英文说明发生了什么。
@@ -540,6 +604,7 @@ mapquery/
 │   ├── cache.py                    # the small disk cache
 │   ├── engine.py                   # the thread pool and the fan out
 │   ├── compare.py                  # the clusters, the consensus and the spread
+│   ├── filters.py                  # the filter on the types of the places
 │   ├── render.py                   # the table, the JSON and the CSV
 │   └── providers/
 │       ├── __init__.py             # the registry
