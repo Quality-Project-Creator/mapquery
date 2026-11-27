@@ -413,6 +413,11 @@ Baidu's own live payload for 天安门, put through the Mercator inverse and the
 GCJ-02 step, gives `(116.3975904, 39.9087759)`. Two providers, two coordinate systems, one
 place, 47 m apart.
 
+One caveat, found by the review of v0.0.1 (`docs/REVIEW-v0.0.1.md`, R-07): the forward
+direction, `ll_to_mc`, picks its band on the latitude and not on the absolute value of it, so it
+is only right in the northern hemisphere. The tool only uses the other direction, `mc_to_ll`,
+which takes the absolute value and is right everywhere. The numbers above therefore hold.
+
 ### The GCJ-02 offset has a truncated variant
 
 The GCJ-02 offset is published in two forms. The short form drops the sine refinement terms

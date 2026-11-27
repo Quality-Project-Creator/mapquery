@@ -536,8 +536,8 @@ request was made.
 
 | Code | Meaning |
 |---|---|
-| 0 | At least one provider answered with data, or the matrix could be computed. |
-| 1 | No provider answered with data: every provider failed, or the matrix could not find the places. |
+| 0 | At least one provider answered, or the matrix could be computed. A provider that answers with no place still counts as an answer. |
+| 1 | No provider answered with data: every provider failed, or the matrix could not find the places. With `--types` it also means that no place of the wanted types was left. |
 | 2 | The command was used in the wrong way, such as a bad point or an empty keyword. |
 | 130 | The command was stopped with Ctrl-C. |
 
@@ -559,6 +559,12 @@ by a few hundred metres, which is more than enough to break a comparison.
 The tool keeps one order and one system inside: the order is `lng,lat` and
 the system is GCJ-02. Every provider converts at its own border, so you
 never see the mess.
+
+One honest detail about that border. The step from WGS-84 to GCJ-02 leaves
+a point outside China alone, but the step to BD-09 and the step back from
+BD-09 apply the offset everywhere, also outside the border. So a point
+outside China is moved when it goes to BD-09 and back, while the WGS-84 to
+GCJ-02 step leaves it alone.
 
 One more thing about Baidu. The web route of Baidu does not give a plain
 latitude and longitude for a place. It gives Baidu Mercator metres. The
@@ -671,8 +677,9 @@ A few more honest notes:
   can do it. Tencent reports `not_supported`, because no channel of
   Tencent can do it.
 - The shared keys of the direct channel belong to the live websites of the
-  providers. They are busy. If a command answers `rate_limited`, wait a
-  moment and try again, or set a key of your own.
+  providers. They are busy, and every user of the tool shares the same
+  quota, so a route can stop working at any time. If a command answers
+  `rate_limited`, wait a moment and try again, or set a key of your own.
 - The tool only calls the data routes of the providers. It never opens a
   browser and it never reads a web page.
 - The messages of the providers are not shown in the interface, because

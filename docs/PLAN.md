@@ -313,9 +313,10 @@ correctly is the actual job.
 - One `requests.Session` per thread (thread-local) so connections are pooled and reused.
 - Results come back in a **fixed provider order**, never completion order, so output is stable.
 - If one provider fails, the others still answer. Each result carries its own status.
-- Exit codes: `0` = at least one provider answered with data, `1` = no provider answered with data
-  (every provider failed, or the matrix could not find the places), `2` = wrong usage,
-  `130` = the command was stopped with Ctrl-C.
+- Exit codes: `0` = at least one provider answered (a provider that answers with no place
+  still counts as an answer), `1` = no provider answered with data (every provider failed,
+  or the matrix could not find the places, or no place of the wanted types was left),
+  `2` = wrong usage, `130` = the command was stopped with Ctrl-C.
 
 ---
 
